@@ -326,48 +326,6 @@ async function createWidget() {
     // Fetch all departure information from MVG API
     let departures = await getDepartures(globalId);
 
-    // Debug: Print departures data in a readable way with friendly explanations
-    console.log("\n===== MVG Departures Debug =====");
-    if (Array.isArray(departures)) {
-        departures.slice(0, 5).forEach((dep, idx) => {
-            console.log(`Departure #${idx + 1}:`);
-            console.log(`  Line: ${dep.label}`);
-            console.log(`  Destination: ${dep.destination}`);
-            console.log(`  RealtimeDepartureTime: ${dep.realtimeDepartureTime}`);
-            console.log(`  Delay: ${dep.delay} (${typeof dep.delay})`);
-            console.log(`  TransportType: ${dep.transportType}`);
-            // Friendly explanation for delay
-            if (dep.delay === undefined) {
-                console.log("    → No delay info: The API may not provide real-time delay data. Look for other fields like 'departureDelay', 'delayMinutes', or 'live'.");
-            } else if (Number(dep.delay) === 0) {
-                console.log("    → On time: The train is scheduled to depart as planned. If all delays are 0, the API may not provide real-time delay info.");
-            } else if (Number(dep.delay) > 0) {
-                console.log("    → Delayed: The train is delayed. The time should turn red in the widget. If not, check if 'delay' is a string and convert it to a number in your code.");
-            } else if (Number(dep.delay) < 0) {
-                console.log("    → Early: The train is early. The time should turn blue in the widget.");
-            }
-            console.log("-----------------------------");
-        });
-        if (departures.length > 5) {
-            console.log(`...and ${departures.length - 5} more departures.`);
-        }
-        // General advice
-        console.log("\nWhat to do:");
-        console.log("- If all delays are 0 or undefined, check for other fields in the data that might indicate delay (e.g., 'departureDelay', 'delayMinutes', 'live').");
-        console.log("- If you find another field, update your code to use it instead of 'delay'.");
-        console.log("- If you see positive delay values, your code should work. If not, check if the value is a string and convert it to a number before comparing.");
-        console.log("- If the departures array is empty, check your station name, parameters, and internet connection.");
-    } else {
-        console.log("Departures data is not an array:", departures);
-        console.log("→ This usually means there was an API or network issue, or the station name is incorrect.");
-    }
-    console.log("===== End of Debug =====\n");
-
-    // Ensure departures is an array
-    if (!Array.isArray(departures)) {
-        departures = [];
-    }
-
     // Filter departures according to user preferences (specific lines or platforms)
     departures = departures.filter(entry => {
         const lineMatches = userLines ? userLines.includes(entry.label) : true;
@@ -482,7 +440,7 @@ async function createWidget() {
         // Spacing between line and info
         rowStack.addSpacer(8);
 
-        // Create a vertical stack for the time and destination
+        // Create a vertical stack for planned and main time
         const infoStack = rowStack.addStack();
         infoStack.layoutVertically();
         infoStack.spacing = 0; // Increase spacing between time and destination
@@ -492,28 +450,55 @@ async function createWidget() {
 
 
         // Calculate actual departure time, accounting for delays
-        const { recalculatedTime, isDelayed } = calculateDeparture(
-            departures[i].delay,
-            departures[i].realtimeDepartureTime
-        );
+        // Use realtimeDepartureTime if available, otherwise calculate from plannedDepartureTime and delayInMinutes
+        let recalculatedTime = departures[i].realtimeDepartureTime;
+        if (typeof recalculatedTime !== 'number' && typeof departures[i].plannedDepartureTime === 'number' && typeof departures[i].delayInMinutes === 'number') {
+            recalculatedTime = departures[i].plannedDepartureTime + (departures[i].delayInMinutes * 60 * 1000);
+        }
         // Subtract CONFIG.subtractMinutes from recalculatedTime
         const adjustedTime = recalculatedTime - (CONFIG.subtractMinutes * 60 * 1000);
-        // Time row (no need for a separate horizontal stack)
-        const departureTime = infoStack.addText(formatDepartureTime(adjustedTime));
-        
-        // Make the first train time bigger and bolder
-        if (i === 0) {
-            departureTime.font = widgetConfig.departurePrimaryFont;
-        } else {
-            departureTime.font = widgetConfig.departureSecondaryFont;
-        }
 
-        if (departures[i].delay > 0) {
-            departureTime.textColor = new Color("#DB3B4B"); // Red for delayed
-        } else if (departures[i].delay < 0) {
-            departureTime.textColor = new Color("#16BAE7"); // Optional: blue for early
+        if (departures[i].delayInMinutes > 0) {
+            // If delayed, show planned and delayed minutes together: HH:MM-mm
+            const timeRowStack = infoStack.addStack();
+            timeRowStack.layoutHorizontally();
+            timeRowStack.centerAlignContent();
+
+            // Planned/original time (white)
+            const plannedDate = new Date(departures[i].plannedDepartureTime - (CONFIG.subtractMinutes * 60 * 1000));
+            const plannedTimeStr = formatDepartureTime(plannedDate);
+            const plannedTimeText = timeRowStack.addText(plannedTimeStr + '-');
+            plannedTimeText.textColor = Color.white();
+            if (i === 0) {
+                plannedTimeText.font = widgetConfig.departurePrimaryFont;
+            } else {
+                plannedTimeText.font = widgetConfig.departureSecondaryFont;
+            }
+            plannedTimeText.centerAlignText();
+
+            // Only minutes part of delayed/actual time (red)
+            const delayedDate = new Date(adjustedTime);
+            const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
+            const delayedTimeText = timeRowStack.addText(delayedMinutes);
+            delayedTimeText.textColor = new Color('#DB5C5C');
+            if (i === 0) {
+                delayedTimeText.font = widgetConfig.departurePrimaryFont;
+            } else {
+                delayedTimeText.font = widgetConfig.departureSecondaryFont;
+            }
+            delayedTimeText.centerAlignText();
         } else {
-            departureTime.textColor = Color.white();
+            // Not delayed, show only main time in white
+            const timeRowStack = infoStack.addStack();
+            timeRowStack.layoutHorizontally();
+            timeRowStack.centerAlignContent();
+            const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
+            mainTime.textColor = Color.white();
+            if (i === 0) {
+                mainTime.font = widgetConfig.departurePrimaryFont;
+            } else {
+                mainTime.font = widgetConfig.departureSecondaryFont;
+            }
         }
 
 
