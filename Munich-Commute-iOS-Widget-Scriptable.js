@@ -127,6 +127,104 @@ if (userTransportTypes) {
     });
 }
 
+// Known widget pixel dimensions for selected devices (screen height as key)
+const DEVICE_WIDGET_SIZES = {
+    2778: { // iPhone 12 Pro Max and similar
+        small: { width: 510, height: 510 },
+        medium: { width: 1092, height: 510 },
+        large: { width: 1092, height: 1146 }
+    },
+    2532: { // iPhone 12/12 Pro and similar
+        small: { width: 474, height: 474 },
+        medium: { width: 1014, height: 474 },
+        large: { width: 1014, height: 1062 }
+    },
+    2796: { // iPhone 14 Pro Max, 15 Plus, 15 Pro Max
+        small: { width: 528, height: 528 },
+        medium: { width: 1116, height: 528 },
+        large: { width: 1116, height: 1152 }
+    },
+    2556: { // iPhone 14 Pro, 15, 15 Pro
+        small: { width: 480, height: 480 },
+        medium: { width: 1032, height: 480 },
+        large: { width: 1032, height: 1080 }
+    },
+    2688: { // iPhone 11 Pro Max, XS Max
+        small: { width: 507, height: 507 },
+        medium: { width: 1080, height: 507 },
+        large: { width: 1080, height: 1137 }
+    },
+    1792: { // iPhone 11, XR
+        small: { width: 338, height: 338 },
+        medium: { width: 720, height: 338 },
+        large: { width: 720, height: 758 }
+    },
+    2340: { // iPhone 12 mini, 13 mini
+        small: { width: 450, height: 450 },
+        medium: { width: 936, height: 450 },
+        large: { width: 936, height: 990 }
+    },
+    2436: { // iPhone X/XS/11 Pro
+        small: { width: 465, height: 465 },
+        medium: { width: 987, height: 465 },
+        large: { width: 987, height: 1035 }
+    },
+    2208: { // Plus phones
+        small: { width: 471, height: 471 },
+        medium: { width: 1044, height: 471 },
+        large: { width: 1044, height: 1071 }
+    },
+    2001: { // Plus in Display Zoom mode
+        small: { width: 444, height: 444 },
+        medium: { width: 963, height: 444 },
+        large: { width: 963, height: 972 }
+    },
+    1624: { // 11/XR in Display Zoom
+        small: { width: 310, height: 310 },
+        medium: { width: 658, height: 310 },
+        large: { width: 658, height: 690 }
+    },
+    1334: { // SE2, 6/7/8
+        small: { width: 296, height: 296 },
+        medium: { width: 642, height: 296 },
+        large: { width: 642, height: 648 }
+    },
+    1136: { // SE1
+        small: { width: 282, height: 282 },
+        medium: { width: 584, height: 282 },
+        large: { width: 584, height: 622 }
+    },
+    3024: { // iPhone 16 Pro Max (estimated)
+        small: { width: 558, height: 558 },
+        medium: { width: 1209, height: 558 },
+        large: { width: 1209, height: 1270 }
+    },
+    2910: { // iPhone 16/16 Pro (estimated)
+        small: { width: 537, height: 537 },
+        medium: { width: 1164, height: 537 },
+        large: { width: 1164, height: 1212 }
+    }
+};
+
+function getWidgetDimensions(family) {
+    const heightKey = Device.screenSize().height.toString();
+    const mapping = DEVICE_WIDGET_SIZES[heightKey];
+    if (mapping && mapping[family]) {
+        return mapping[family];
+    }
+
+    const screenWidth = Device.screenSize().width;
+    const screenHeight = Device.screenSize().height;
+    switch (family) {
+        case 'small':
+            return { width: screenWidth / 2, height: screenWidth / 2 };
+        case 'medium':
+            return { width: screenWidth, height: screenWidth / 2 };
+        default:
+            return { width: screenWidth, height: screenHeight / 2 };
+    }
+}
+
 // Widget size configurations
 const WIDGET_CONFIG = {
     small: {
@@ -314,6 +412,14 @@ async function createWidget() {
     // Determine widget size (small, medium, large) and get corresponding configuration
     const widgetSize = config.widgetFamily || 'large';
     const widgetConfig = WIDGET_CONFIG[widgetSize];
+    const { width: widgetWidth, height: widgetHeight } = getWidgetDimensions(widgetSize);
+
+    // Log device information and widget dimensions for debugging
+    const deviceHeight = Device.screenSize().height.toString();
+    const knownDevice = DEVICE_WIDGET_SIZES[deviceHeight] ? 'known' : 'unknown';
+    console.log(
+        `Device ${Device.model()} (${deviceHeight}px ${knownDevice}) -> ${widgetSize} ${widgetWidth}x${widgetHeight}`
+    );
     
     // Get station ID from the station name provided by user
     const globalId = await getStationId(userStation);
@@ -357,8 +463,11 @@ async function createWidget() {
     // Use default system padding instead of manual values
     widget.useDefaultPadding();
 
-    // Calculate content width based on column sizes and spacing
-    const contentWidth = widgetConfig.lineBadgeSize.width + widgetConfig.destinationColumnSize.width + widgetConfig.departureTimeColumnSize.width + 2 * widgetConfig.spacing;
+    // Calculate content width based on column sizes and spacing and ensure it does not exceed the widget width
+    const contentWidth = Math.min(
+        widgetWidth,
+        widgetConfig.lineBadgeSize.width + widgetConfig.destinationColumnSize.width + widgetConfig.departureTimeColumnSize.width + 2 * widgetConfig.spacing
+    );
 
     // Create main vertical stack for all widget content
     const mainStack = widget.addStack();
