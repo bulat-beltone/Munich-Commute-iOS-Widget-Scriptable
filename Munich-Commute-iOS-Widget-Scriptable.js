@@ -4,6 +4,10 @@
 // noinspection LanguageDetectionInspection
 
 // Updated July 6, 2025 - Added support for iPhone 16 Pro Max and 16 Pro
+// Check for updates here: https://github.com/bulat-beltone/Munich-Commute-iOS-Widget-Scriptable
+
+// Example usage:
+// station:Marienplatz; types:sbahn,ubahn,tram; platform:1; lines:S1; gradient:purple;
 
 // Configuration
 const CONFIG = {
