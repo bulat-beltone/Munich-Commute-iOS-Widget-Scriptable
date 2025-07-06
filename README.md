@@ -1,16 +1,22 @@
 # Munich Commute iOS Widget
 
-A Scriptable app for iOS that displays real-time Munich public transport departures directly on your home screen.
+A widget for iOS that displays real-time Munich public transport departures.
+Works based on Scriptable app.
 
 ## Features
 
-- 🚇 **Real-time departures** for all Munich public transport
-- 🎨 **Customizable gradients** and themes
-- 📱 **Multiple widget sizes** (small, medium, large)
-- 🚌 **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
-- 🎯 **Configurable filtering** by station, platform, lines, and transport types
-- ⏰ **Live departure times** with delay information
-- 🔄 **Automatic updates** every few minutes (Note: Actual update frequency is controlled by iOS and may vary)
+- **Filtering** by transport types or platform
+- **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
+- **Real-time departures** using official MVV API
+- **Customizable colors**
+
+Color options:
+- grey
+- red
+- blue
+- green
+- purple
+- teal
 
 ## Installation
 
@@ -157,6 +163,17 @@ Feel free to submit issues or suggestions for improvements to make this widget e
 
 This project is open source and available under standard usage terms.
 
+## Limitations
+
+- **iOS Widget Update Frequency:**
+  - iOS controls when widgets are refreshed, and updates may not always happen as frequently as you expect.
+  - If you want to see the latest data immediately, tap the widget. This will open a large version of the widget in Scriptable with fresh, up-to-date information, bypassing the iOS update schedule. 
+
+## Acknowledgments
+
+- Original MVG widget concept by [eckertj](https://github.com/eckertj/MVG-Abfahrtsmonitor) and contributors.
+- Thanks to the Munich public transport API (mvg.de) for providing real-time data.
+
 ## Related Projects
 
 This widget is inspired by and builds upon the work of other Munich public transport widgets for Scriptable:
@@ -170,14 +187,3 @@ This widget is inspired by and builds upon the work of other Munich public trans
 - [MVG-Abfahrtsmonitor by Nisbo](https://github.com/Nisbo/MVG-Abfahrtsmonitor):
   - A maintained fork of the original project, ensuring continued compatibility and updates.
   - Retains the same core features and setup process as the original.
-
-## Acknowledgments
-
-- Original MVG widget concept by [eckertj](https://github.com/eckertj/MVG-Abfahrtsmonitor) and contributors.
-- Thanks to the Munich public transport API (mvg.de) for providing real-time data.
-
-## Limitations
-
-- **iOS Widget Update Frequency:**
-  - iOS controls when widgets are refreshed, and updates may not always happen as frequently as you expect.
-  - If you want to see the latest data immediately, tap the widget. This will open a large version of the widget in Scriptable with fresh, up-to-date information, bypassing the iOS update schedule. 
