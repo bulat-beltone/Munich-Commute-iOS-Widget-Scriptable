@@ -326,6 +326,43 @@ async function createWidget() {
     // Fetch all departure information from MVG API
     let departures = await getDepartures(globalId);
 
+    // Debug: Print departures data in a readable way with friendly explanations
+    console.log("\n===== MVG Departures Debug =====");
+    if (Array.isArray(departures)) {
+        departures.slice(0, 5).forEach((dep, idx) => {
+            console.log(`Departure #${idx + 1}:`);
+            console.log(`  Line: ${dep.label}`);
+            console.log(`  Destination: ${dep.destination}`);
+            console.log(`  RealtimeDepartureTime: ${dep.realtimeDepartureTime}`);
+            console.log(`  Delay: ${dep.delay} (${typeof dep.delay})`);
+            console.log(`  TransportType: ${dep.transportType}`);
+            // Friendly explanation for delay
+            if (dep.delay === undefined) {
+                console.log("    → No delay info: The API may not provide real-time delay data. Look for other fields like 'departureDelay', 'delayMinutes', or 'live'.");
+            } else if (Number(dep.delay) === 0) {
+                console.log("    → On time: The train is scheduled to depart as planned. If all delays are 0, the API may not provide real-time delay info.");
+            } else if (Number(dep.delay) > 0) {
+                console.log("    → Delayed: The train is delayed. The time should turn red in the widget. If not, check if 'delay' is a string and convert it to a number in your code.");
+            } else if (Number(dep.delay) < 0) {
+                console.log("    → Early: The train is early. The time should turn blue in the widget.");
+            }
+            console.log("-----------------------------");
+        });
+        if (departures.length > 5) {
+            console.log(`...and ${departures.length - 5} more departures.`);
+        }
+        // General advice
+        console.log("\nWhat to do:");
+        console.log("- If all delays are 0 or undefined, check for other fields in the data that might indicate delay (e.g., 'departureDelay', 'delayMinutes', 'live').");
+        console.log("- If you find another field, update your code to use it instead of 'delay'.");
+        console.log("- If you see positive delay values, your code should work. If not, check if the value is a string and convert it to a number before comparing.");
+        console.log("- If the departures array is empty, check your station name, parameters, and internet connection.");
+    } else {
+        console.log("Departures data is not an array:", departures);
+        console.log("→ This usually means there was an API or network issue, or the station name is incorrect.");
+    }
+    console.log("===== End of Debug =====\n");
+
     // Ensure departures is an array
     if (!Array.isArray(departures)) {
         departures = [];
