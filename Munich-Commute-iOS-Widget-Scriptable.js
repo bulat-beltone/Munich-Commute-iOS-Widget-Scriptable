@@ -3,6 +3,8 @@
 // icon-color: deep-green; icon-glyph: subway;
 // noinspection LanguageDetectionInspection
 
+// Updated July 6, 2025 - Added support for iPhone 16 Pro Max and 16 Pro
+
 // Configuration
 const CONFIG = {
     subtractMinutes: 1, // Subtract this many minutes from current time display
