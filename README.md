@@ -110,6 +110,13 @@ station:Sendlinger Tor;types:sbahn,ubahn,tram;gradient:purple
 - Full station information
 - Ideal for monitoring multiple connections
 
+### Widget Dimension Detection
+The widget automatically checks `config.widgetFamily` and adapts fonts and
+layout for the current size. When possible it also looks up known pixel
+dimensions using `Device.screenSize()`. The lookup table now includes sizes for
+all iPhone models through the iPhone 16 generation so the columns fit within the
+widget's actual width.
+
 ## Customization
 
 The script includes several customization options in the `CONFIG` object:
