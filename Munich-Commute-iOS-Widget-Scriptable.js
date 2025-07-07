@@ -134,6 +134,7 @@ if (userTransportTypes) {
 }
 
 // Known widget pixel dimensions for selected devices (screenshot height in pixels as key)
+// Known widget pixel dimensions for selected devices (screenshot height in pixels as key)
 const DEVICE_WIDGET_SIZES = {
     2778: { // iPhone 12 Pro Max and similar
         small: { width: 510, height: 510 },
@@ -149,7 +150,15 @@ const DEVICE_WIDGET_SIZES = {
         small:  { width: 510, height: 510 },
         medium: { width: 1092, height: 510 },
         large:  { width: 1092, height: 1146 }
+    2796: { // iPhone 14 Pro Max / 15 Plus / 15 Pro Max / 16 Plus
+        small:  { width: 510, height: 510 },
+        medium: { width: 1092, height: 510 },
+        large:  { width: 1092, height: 1146 }
     },
+    2556: { // iPhone 14 Pro / 15 / 15 Pro / 16
+        small:  { width: 474, height: 474 },
+        medium: { width: 1017, height: 474 },
+        large:  { width: 1017, height: 1062 }
     2556: { // iPhone 14 Pro / 15 / 15 Pro / 16
         small:  { width: 474, height: 474 },
         medium: { width: 1017, height: 474 },
@@ -165,6 +174,7 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 720, height: 338 },
         large: { width: 720, height: 758 }
     },
+    2436: { // iPhone minis and 5.8" X/XS/11 Pro
     2436: { // iPhone minis and 5.8" X/XS/11 Pro
         small: { width: 465, height: 465 },
         medium: { width: 987, height: 465 },
@@ -196,10 +206,12 @@ const DEVICE_WIDGET_SIZES = {
         large: { width: 584, height: 622 }
     },
     2868: { // iPhone 16 Pro Max
+    2868: { // iPhone 16 Pro Max
         small: { width: 558, height: 558 },
         medium: { width: 1209, height: 558 },
         large: { width: 1209, height: 1270 }
     },
+    2622: { // iPhone 16 Pro
     2622: { // iPhone 16 Pro
         small: { width: 537, height: 537 },
         medium: { width: 1164, height: 537 },
@@ -208,6 +220,7 @@ const DEVICE_WIDGET_SIZES = {
 };
 
 function getWidgetDimensions(family) {
+    const heightKey = Device.screenResolution().height.toString();
     const heightKey = Device.screenResolution().height.toString();
     const mapping = DEVICE_WIDGET_SIZES[heightKey];
     console.log(`[DEBUG] Device heightKey: ${heightKey}, family: ${family}`);
@@ -569,11 +582,10 @@ async function createWidget() {
 
         // DEPARTURE TIME
         // Calculate actual departure time, accounting for delays
-        // Use realtimeDepartureTime if available, otherwise calculate from plannedDepartureTime and delayInMinutes
-        let recalculatedTime = departures[i].realtimeDepartureTime;
-        if (typeof recalculatedTime !== 'number' && typeof departures[i].plannedDepartureTime === 'number' && typeof departures[i].delayInMinutes === 'number') {
-            recalculatedTime = departures[i].plannedDepartureTime + (departures[i].delayInMinutes * 60 * 1000);
-        }
+        const { recalculatedTime, isDelayed } = calculateDeparture(
+            departures[i].delay,
+            departures[i].realtimeDepartureTime
+        );
         // Subtract CONFIG.subtractMinutes from recalculatedTime
         const adjustedTime = recalculatedTime - (CONFIG.subtractMinutes * 60 * 1000);
 
@@ -589,9 +601,9 @@ async function createWidget() {
             const plannedTimeText = timeRowStack.addText(plannedTimeStr);
             plannedTimeText.textColor = Color.white();
             if (i === 0) {
-                plannedTimeText.font = widgetConfig.departurePrimaryFont;
+            departureTime.font = widgetConfig.departurePrimaryFont;
             } else {
-                plannedTimeText.font = widgetConfig.departureSecondaryFont;
+            departureTime.font = widgetConfig.departureSecondaryFont;
             }
             plannedTimeText.centerAlignText();
 
@@ -607,17 +619,7 @@ async function createWidget() {
             }
             colonMinutesText.centerAlignText();
         } else {
-            // Not delayed, show only main time in white
-            const timeRowStack = infoStack.addStack();
-            timeRowStack.layoutHorizontally();
-            timeRowStack.centerAlignContent();
-            const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
-            mainTime.textColor = Color.white();
-            if (i === 0) {
-                mainTime.font = widgetConfig.departurePrimaryFont;
-            } else {
-                mainTime.font = widgetConfig.departureSecondaryFont;
-            }
+            departureTime.textColor = Color.white();
         }
 
 
