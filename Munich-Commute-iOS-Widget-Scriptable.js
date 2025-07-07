@@ -578,28 +578,28 @@ async function createWidget() {
         const adjustedTime = recalculatedTime - (CONFIG.subtractMinutes * 60 * 1000);
 
         if (departures[i].delayInMinutes > 0) {
-            // If delayed, show planned and delayed minutes together: HH:MM-mm
+            // If delayed, show delayed time as main time and planned minutes after colon
             const timeRowStack = infoStack.addStack();
             timeRowStack.layoutHorizontally();
             timeRowStack.centerAlignContent();
 
-            // Planned/original time (white)
-            const plannedDate = new Date(departures[i].plannedDepartureTime - (CONFIG.subtractMinutes * 60 * 1000));
-            const plannedTimeStr = formatDepartureTime(plannedDate);
-            const plannedTimeText = timeRowStack.addText(plannedTimeStr);
-            plannedTimeText.textColor = Color.white();
-            if (i === 0) {
-                plannedTimeText.font = widgetConfig.departurePrimaryFont;
-            } else {
-                plannedTimeText.font = widgetConfig.departureSecondaryFont;
-            }
-            plannedTimeText.centerAlignText();
-
-            // Colon and delayed minutes (bold, red, same font as planned time)
+            // Delayed/actual time (white)
             const delayedDate = new Date(adjustedTime);
-            const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
-            const colonMinutesText = timeRowStack.addText(' :' + delayedMinutes);
-            colonMinutesText.textColor = new Color('#DB5C5C');
+            const delayedTimeStr = formatDepartureTime(delayedDate);
+            const delayedTimeText = timeRowStack.addText(delayedTimeStr);
+            delayedTimeText.textColor = Color.white();
+            if (i === 0) {
+                delayedTimeText.font = widgetConfig.departurePrimaryFont;
+            } else {
+                delayedTimeText.font = widgetConfig.departureSecondaryFont;
+            }
+            delayedTimeText.centerAlignText();
+
+            // Colon and original minutes in grey
+            const plannedDate = new Date(departures[i].plannedDepartureTime - (CONFIG.subtractMinutes * 60 * 1000));
+            const plannedMinutes = plannedDate.getMinutes().toString().padStart(2, '0');
+            const colonMinutesText = timeRowStack.addText(' :' + plannedMinutes);
+            colonMinutesText.textColor = new Color('#A0A0A0');
             if (i === 0) {
                 colonMinutesText.font = widgetConfig.departurePrimaryFont;
             } else {
