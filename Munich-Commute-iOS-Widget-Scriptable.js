@@ -63,6 +63,117 @@ let userLines = null;
 let userGradient = "grey"; // Default gradient
 let userTransportTypes = null;
 
+// ----- Saved Configuration Helpers -----
+const fm = FileManager.local();
+const configDir = fm.joinPath(fm.documentsDirectory(), "munich-commute");
+const configFile = fm.joinPath(configDir, "configs.json");
+
+function loadSavedConfigs() {
+    if (!fm.fileExists(configDir)) fm.createDirectory(configDir);
+    if (!fm.fileExists(configFile)) {
+        fm.writeString(configFile, "[]");
+        return [];
+    }
+    try {
+        return JSON.parse(fm.readString(configFile));
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveConfigs(list) {
+    fm.writeString(configFile, JSON.stringify(list, null, 2));
+}
+
+async function promptForConfig(current = {}) {
+    // Name
+    let a = new Alert();
+    a.title = "Widget Name";
+    a.addTextField("Name", current.name || "");
+    a.addAction("OK");
+    await a.presentAlert();
+    const name = a.textFieldValue(0) || current.name || "Widget";
+
+    // Station
+    a = new Alert();
+    a.title = "Station";
+    a.addTextField("Station", current.station || "");
+    a.addAction("OK");
+    await a.presentAlert();
+    const station = a.textFieldValue(0) || "Marienplatz";
+
+    // Platform
+    a = new Alert();
+    a.title = "Platform (optional)";
+    a.addTextField("", current.platform ? String(current.platform) : "");
+    a.addAction("OK");
+    await a.presentAlert();
+    const platformText = a.textFieldValue(0);
+    const platform = platformText ? Number(platformText) : null;
+
+    // Lines
+    a = new Alert();
+    a.title = "Lines (comma separated)";
+    a.addTextField("", current.lines ? current.lines.join(",") : "");
+    a.addAction("OK");
+    await a.presentAlert();
+    const linesText = a.textFieldValue(0);
+    const lines = linesText ? linesText.split(",").map(l => l.trim()).filter(Boolean) : null;
+
+    // Gradient
+    const gradients = Object.keys(CONFIG.gradients);
+    a = new Alert();
+    a.title = "Gradient";
+    gradients.forEach(g => a.addAction(g));
+    a.addCancelAction("Default");
+    const gIdx = await a.presentSheet();
+    const gradient = gIdx === -1 ? "grey" : gradients[gIdx];
+
+    // Transport types
+    a = new Alert();
+    a.title = "Transport types (comma separated)";
+    a.addTextField("", current.types ? current.types.join(",") : "");
+    a.addAction("OK");
+    await a.presentAlert();
+    const typesText = a.textFieldValue(0);
+    const types = typesText ? typesText.split(",").map(t => t.trim()).filter(Boolean) : null;
+
+    return { name, station, platform, lines, gradient, types };
+}
+
+async function chooseConfiguration() {
+    const saved = loadSavedConfigs();
+    const menu = new Alert();
+    menu.title = "Saved Widgets";
+    saved.forEach(cfg => menu.addAction(cfg.name));
+    menu.addAction("Create New");
+    menu.addCancelAction("Cancel");
+    const idx = await menu.presentSheet();
+    if (idx === -1) return null;
+    if (idx === saved.length) {
+        const newCfg = await promptForConfig({});
+        saved.push(newCfg);
+        saveConfigs(saved);
+        return newCfg;
+    } else {
+        const selected = saved[idx];
+        const act = new Alert();
+        act.title = selected.name;
+        act.addAction("Use");
+        act.addAction("Edit");
+        act.addCancelAction("Cancel");
+        const aIdx = await act.presentAlert();
+        if (aIdx === -1) return null;
+        if (aIdx === 1) { // Edit
+            const updated = await promptForConfig(selected);
+            saved[idx] = updated;
+            saveConfigs(saved);
+            return updated;
+        }
+        return selected;
+    }
+}
+
 // Parse parameters in any order
 parameters.forEach(param => {
     const trimmedParam = param.trim();
@@ -99,6 +210,18 @@ parameters.forEach(param => {
             break;
     }
 });
+
+// If script is launched in the app, allow user to choose or create presets
+if (!config.runInWidget) {
+    const chosen = await chooseConfiguration();
+    if (chosen) {
+        userStation = chosen.station;
+        userPlatforms = chosen.platform;
+        userLines = chosen.lines;
+        userGradient = chosen.gradient;
+        userTransportTypes = chosen.types;
+    }
+}
 
 // Apply transport type settings if specified
 if (userTransportTypes) {

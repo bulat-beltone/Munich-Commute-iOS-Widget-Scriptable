@@ -9,6 +9,7 @@ Works based on Scriptable app.
 - **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
 - **Real-time departures** using official MVV API
 - **Customizable colors**
+- **Save and edit widget presets directly in the Scriptable app**
 
 Color options:
 - grey
@@ -31,6 +32,9 @@ Color options:
 2. Long press the widget and select "Edit Widget"
 3. Choose your script from the list
 4. Optionally add parameters (see Configuration section)
+
+### Saved Widget Presets
+Run the script directly in the Scriptable app to manage saved presets. Choose an existing preset to preview it or create a new one and you will be prompted for each parameter.
 
 ### Configuration Parameters
 
