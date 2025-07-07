@@ -133,7 +133,7 @@ if (userTransportTypes) {
     });
 }
 
-// Known widget pixel dimensions for selected devices (screen height as key)
+// Known widget pixel dimensions for selected devices (screenshot height in pixels as key)
 const DEVICE_WIDGET_SIZES = {
     2778: { // iPhone 12 Pro Max and similar
         small: { width: 510, height: 510 },
@@ -145,15 +145,15 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 1014, height: 474 },
         large: { width: 1014, height: 1062 }
     },
-    2796: { // iPhone 14 Pro Max, 15 Plus, 15 Pro Max
-        small: { width: 528, height: 528 },
-        medium: { width: 1116, height: 528 },
-        large: { width: 1116, height: 1152 }
+    2796: { // iPhone 14 Pro Max / 15 Plus / 15 Pro Max / 16 Plus
+        small:  { width: 510, height: 510 },
+        medium: { width: 1092, height: 510 },
+        large:  { width: 1092, height: 1146 }
     },
-    2556: { // iPhone 14 Pro, 15, 15 Pro
-        small: { width: 480, height: 480 },
-        medium: { width: 1032, height: 480 },
-        large: { width: 1032, height: 1080 }
+    2556: { // iPhone 14 Pro / 15 / 15 Pro / 16
+        small:  { width: 474, height: 474 },
+        medium: { width: 1017, height: 474 },
+        large:  { width: 1017, height: 1062 }
     },
     2688: { // iPhone 11 Pro Max, XS Max
         small: { width: 507, height: 507 },
@@ -165,12 +165,7 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 720, height: 338 },
         large: { width: 720, height: 758 }
     },
-    2340: { // iPhone 12 mini, 13 mini
-        small: { width: 450, height: 450 },
-        medium: { width: 936, height: 450 },
-        large: { width: 936, height: 990 }
-    },
-    2436: { // iPhone X/XS/11 Pro
+    2436: { // iPhone minis and 5.8" X/XS/11 Pro
         small: { width: 465, height: 465 },
         medium: { width: 987, height: 465 },
         large: { width: 987, height: 1035 }
@@ -200,12 +195,12 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 584, height: 282 },
         large: { width: 584, height: 622 }
     },
-    3024: { // iPhone 16 Pro Max (estimated)
+    2868: { // iPhone 16 Pro Max
         small: { width: 558, height: 558 },
         medium: { width: 1209, height: 558 },
         large: { width: 1209, height: 1270 }
     },
-    2910: { // iPhone 16/16 Pro (estimated)
+    2622: { // iPhone 16 Pro
         small: { width: 537, height: 537 },
         medium: { width: 1164, height: 537 },
         large: { width: 1164, height: 1212 }
@@ -213,14 +208,17 @@ const DEVICE_WIDGET_SIZES = {
 };
 
 function getWidgetDimensions(family) {
-    const heightKey = Device.screenSize().height.toString();
+    const heightKey = Device.screenResolution().height.toString();
     const mapping = DEVICE_WIDGET_SIZES[heightKey];
+    console.log(`[DEBUG] Device heightKey: ${heightKey}, family: ${family}`);
     if (mapping && mapping[family]) {
+        console.log(`[DEBUG] Found mapping for family '${family}':`, mapping[family]);
         return mapping[family];
     }
 
-    const screenWidth = Device.screenSize().width;
-    const screenHeight = Device.screenSize().height;
+    const screenWidth = Device.screenResolution().width;
+    const screenHeight = Device.screenResolution().height;
+    console.log(`[DEBUG] Fallback widget size for family '${family}': screenWidth=${screenWidth}, screenHeight=${screenHeight}`);
     switch (family) {
         case 'small':
             return { width: screenWidth / 2, height: screenWidth / 2 };
@@ -238,7 +236,6 @@ const WIDGET_CONFIG = {
         itemsCount: 2,
         columnHeight: 30,
         spacing: 4,
-        padding: 3,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(13),        // Station name font
@@ -268,7 +265,6 @@ const WIDGET_CONFIG = {
         itemsCount: 2,
         columnHeight: 30,
         spacing: 4,
-        padding: 3,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(13),        // Station name font
@@ -296,7 +292,6 @@ const WIDGET_CONFIG = {
         itemsCount: 6,
         columnHeight: 40,
         spacing: 8,
-        padding: 5,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(20),        // Station name font
@@ -329,18 +324,25 @@ const LINE_COLORS = {
         U3: "#F36E31",
         U4: "#0AB38D",
         U5: "#B8740E",
-        U6: "#006CB3"
+        U6: "#006CB3",
+
+        // U7 and U8 are special cases, they have a gradient background
+        U7_gradient_top: "#C40C37", // U2
+        U7_gradient_bottom: "#438136", // U1
+        U8_gradient_top: "#C40C37", // U2
+        U8_gradient_bottom: "#F36E31" // U3
     },
     SBAHN: {
         S1: "#16BAE7",
-        S2: "#76B82A",
+        S2: "#6BA626",
         S3: "#834DF0",
         S4: "#DB3B4B",
         S5: "#005E82",
         S6: "#00975F",
-        S7: "#943126",
-        S8: "#000000",
-        S20: "#ED6B83"
+        S7: "#A6372B",
+        S8: "#ffffff1a", // transparent white
+        S8_fg: "#f3bc31", // yellow text
+        S20: "#E84563"
     },
     BUS: "#00586A",
     REGIONAL_BUS: "#4682B4",
@@ -415,48 +417,50 @@ async function getDepartures(globalId) {
 
 // Widget Creation
 async function createWidget() {
-    // Determine widget size (small, medium, large) and get corresponding configuration
+    console.log('[INFO] Step 2: Determining widget and device info...');
     const widgetSize = config.widgetFamily || 'large';
+    console.log(`[INFO]   - Widget family: ${widgetSize}`);
     const widgetConfig = WIDGET_CONFIG[widgetSize];
     const { width: widgetWidth, height: widgetHeight } = getWidgetDimensions(widgetSize);
+    const deviceHeight = Device.screenResolution().height.toString();
+    const deviceModel = Device.model();
+    console.log(`[INFO]   - Device: ${deviceModel} (${deviceHeight}px)`);
 
-    // Log device information and widget dimensions for debugging
-    const deviceHeight = Device.screenSize().height.toString();
-    const knownDevice = DEVICE_WIDGET_SIZES[deviceHeight] ? 'known' : 'unknown';
-    console.log(
-        `Device ${Device.model()} (${deviceHeight}px ${knownDevice}) -> ${widgetSize} ${widgetWidth}x${widgetHeight}`
-    );
-    
-    // Get station ID from the station name provided by user
+    console.log('[INFO] Step 3: Fetching station ID...');
     const globalId = await getStationId(userStation);
     if (!globalId) {
         let errorWidget = new ListWidget();
         errorWidget.addText("Station not found");
+        console.log(`[ERROR]   - Station not found for name: ${userStation}`);
         return errorWidget;
     }
+    console.log(`[INFO]   - Station ID found: ${globalId}`);
 
-    // Fetch all departure information from MVG API
+    console.log('[INFO] Step 4: Fetching departures from MVG API...');
     let departures = await getDepartures(globalId);
+    console.log(`[INFO]   - Departures fetched: ${departures.length}`);
 
-    // Filter departures according to user preferences (specific lines or platforms)
+    console.log('[INFO] Step 5: Filtering departures by user preferences...');
     departures = departures.filter(entry => {
         const lineMatches = userLines ? userLines.includes(entry.label) : true;
         const platformMatches = userPlatforms ? entry.platform === userPlatforms : true;
         return lineMatches && platformMatches;
     });
+    console.log(`[INFO]   - Departures after filter: ${departures.length}`);
 
-    // If no departures, show a message and return the widget
     if (departures.length === 0) {
         const widget = new ListWidget();
         widget.addText(userStation.replace(/^München-/, ''));
         widget.addSpacer(4);
         widget.addText("No departures found");
+        console.log(`[WARN]   - No departures found for station: ${userStation}`);
         return widget;
     }
 
-    // Initialize widget container
+    console.log('[INFO] Step 6: Building widget UI...');
     const widget = new ListWidget();
-    
+    widget.useDefaultPadding();
+
     // Apply gradient background
     const gradient = new LinearGradient();
     gradient.colors = [
@@ -465,29 +469,17 @@ async function createWidget() {
     ];
     gradient.locations = [0.0, 1.0];
     widget.backgroundGradient = gradient;
-    
-    // Use default system padding instead of manual values
-    widget.useDefaultPadding();
-
-    // Calculate content width based on column sizes and spacing and ensure it does not exceed the widget width
-    const contentWidth = Math.min(
-        widgetWidth,
-        widgetConfig.lineBadgeSize.width + widgetConfig.destinationColumnSize.width + widgetConfig.departureTimeColumnSize.width + 2 * widgetConfig.spacing
-    );
 
     // Create main vertical stack for all widget content
     const mainStack = widget.addStack();
     mainStack.layoutVertically();
     mainStack.topAlignContent();
-
+    console.log('[INFO]   - Added main vertical stack');
 
     // HEADING - Station Name & Time
-
-
-    // Create header section with station name
     const headerStack = mainStack.addStack();
     headerStack.layoutVertically();
-    headerStack.size = new Size(contentWidth, 0); // Use auto height
+    console.log('[INFO]   - Added header stack');
 
     // Create horizontal stack for the icon and station name
     const titleStack = headerStack.addStack();
@@ -508,44 +500,58 @@ async function createWidget() {
     stationName.leftAlignText();
     stationName.font = widgetConfig.stationNameFont;
     stationName.lineLimit = 1;
+    console.log('[INFO]   - Added station name and icon');
 
     // Add space between header and departure information
     mainStack.addSpacer();
-
+    console.log('[INFO]   - Added spacer after header');
 
     // Add rows for each departure, limited by itemsCount from widget configuration
     for (let i = 0; i < Math.min(widgetConfig.itemsCount, departures.length); i++) {
-        // Create horizontal stack for this departure row
         const rowStack = mainStack.addStack();
-        rowStack.size = new Size(contentWidth, 0); 
         rowStack.layoutHorizontally();
         rowStack.topAlignContent();
-
-
-        // LINE NAME
-
-        // Create a container for the line badge with margin
         const lineBadgeContainer = rowStack.addStack();
         lineBadgeContainer.layoutVertically();
-        lineBadgeContainer.addSpacer(i === 0 ? 5 : 4); // 5px for first train, 4px for others
-        
-        // First column: Transport line identification (e.g., S1, U3, Bus 100)
         const lineStack = lineBadgeContainer.addStack();
         lineStack.size = widgetConfig.lineBadgeSize;
+        console.log(`[DEBUG] lineStack.size set to: width=${widgetConfig.lineBadgeSize.width}, height=${widgetConfig.lineBadgeSize.height}`);
         lineStack.centerAlignContent(); // Keep centering the text within the badge
 
         const lineName = lineStack.addText(departures[i].label);
         const lineColor = getLineColor(departures[i].transportType, departures[i].label);
         
-        // Special handling for U7 and U8 lines which have different color schemes
-        if (departures[i].label === "U7" || departures[i].label === "U8") {
-            lineStack.backgroundColor = new Color(departures[i].label === "U7" ? "#C40C37" : "#F36E31");
-            lineName.textColor = new Color(departures[i].label === "U7" ? "#438136" : "#C40C37");
-        } else {
+        // Versatile badge background: use gradient if *_gradient_top and *_gradient_bottom exist
+        const transportColors = LINE_COLORS[departures[i].transportType];
+        const label = departures[i].label;
+        const gradTopKey = label + "_gradient_top";
+        const gradBottomKey = label + "_gradient_bottom";
+        let usedGradient = false;
+        if (transportColors && transportColors[gradTopKey] && transportColors[gradBottomKey]) {
+            // Use gradient if both keys exist
+            const topColor = transportColors[gradTopKey];
+            const bottomColor = transportColors[gradBottomKey];
+            let grad = new LinearGradient();
+            grad.colors = [new Color(topColor), new Color(bottomColor)];
+            grad.locations = [0.5, 0.51]; // sharp transition between colors
+            grad.startPoint = new Point(0, 0);
+            grad.endPoint = new Point(0, 1); // vertical gradient
+            lineStack.backgroundGradient = grad;
+            lineStack.cornerRadius = 4;
+            usedGradient = true;
+            lineName.textColor = Color.white();
+        }
+        if (!usedGradient) {
             // Use standard MVG colors for all other lines
             lineStack.backgroundColor = new Color(lineColor);
             lineStack.cornerRadius = 4;
-            lineName.textColor = Color.white();
+            // Check for fg color (e.g., S8_fg)
+            const fgKey = label + "_fg";
+            if (transportColors && transportColors[fgKey]) {
+                lineName.textColor = new Color(transportColors[fgKey]);
+            } else {
+                lineName.textColor = Color.white();
+            }
         }
 
         lineName.font = widgetConfig.lineBadgeFont;
@@ -562,8 +568,6 @@ async function createWidget() {
         
 
         // DEPARTURE TIME
-
-
         // Calculate actual departure time, accounting for delays
         // Use realtimeDepartureTime if available, otherwise calculate from plannedDepartureTime and delayInMinutes
         let recalculatedTime = departures[i].realtimeDepartureTime;
@@ -582,7 +586,7 @@ async function createWidget() {
             // Planned/original time (white)
             const plannedDate = new Date(departures[i].plannedDepartureTime - (CONFIG.subtractMinutes * 60 * 1000));
             const plannedTimeStr = formatDepartureTime(plannedDate);
-            const plannedTimeText = timeRowStack.addText(plannedTimeStr + '-');
+            const plannedTimeText = timeRowStack.addText(plannedTimeStr);
             plannedTimeText.textColor = Color.white();
             if (i === 0) {
                 plannedTimeText.font = widgetConfig.departurePrimaryFont;
@@ -591,17 +595,17 @@ async function createWidget() {
             }
             plannedTimeText.centerAlignText();
 
-            // Only minutes part of delayed/actual time (red)
+            // Colon and delayed minutes (bold, red, same font as planned time)
             const delayedDate = new Date(adjustedTime);
             const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
-            const delayedTimeText = timeRowStack.addText(delayedMinutes);
-            delayedTimeText.textColor = new Color('#DB5C5C');
+            const colonMinutesText = timeRowStack.addText(' :' + delayedMinutes);
+            colonMinutesText.textColor = new Color('#DB5C5C');
             if (i === 0) {
-                delayedTimeText.font = widgetConfig.departurePrimaryFont;
+                colonMinutesText.font = widgetConfig.departurePrimaryFont;
             } else {
-                delayedTimeText.font = widgetConfig.departureSecondaryFont;
+                colonMinutesText.font = widgetConfig.departureSecondaryFont;
             }
-            delayedTimeText.centerAlignText();
+            colonMinutesText.centerAlignText();
         } else {
             // Not delayed, show only main time in white
             const timeRowStack = infoStack.addStack();
@@ -618,8 +622,6 @@ async function createWidget() {
 
 
         // DESTINATION NAME
-
-
         // Destination directly below time, no special alignment needed
         const destinationName = infoStack.addText(departures[i].destination);
         destinationName.font = widgetConfig.destinationFont;
@@ -634,27 +636,41 @@ async function createWidget() {
         if (i < Math.min(widgetConfig.itemsCount, departures.length) - 1) {
             mainStack.addSpacer(12); // More space after the first row
         }
+        console.log(`[INFO]   - Added row for departure ${i + 1}: line ${departures[i].label}, destination ${departures[i].destination}`);
     }
+    console.log('[INFO]   - Finished adding departure rows');
 
     return widget;
 }
 
 // Main execution
+console.log('[INFO] Munich Commute Widget script started');
+console.log('[INFO] Step 1: Parsing parameters...');
+console.log(`[INFO]   - Station: '${userStation}'`);
+console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
+console.log(`[INFO]   - Lines: '${userLines}'`);
+console.log(`[INFO]   - Gradient: '${userGradient}'`);
+console.log(`[INFO]   - Transport Types: '${userTransportTypes}'`);
 const widget = await createWidget();
+console.log('[INFO] Step 7: Widget construction complete.');
 
 if (!config.runInWidget) {
     const widgetSize = config.widgetFamily || 'large';
     switch(widgetSize) {
         case 'small':
+            console.log('[INFO] Step 8: Presenting small widget preview.');
             await widget.presentSmall();
             break;
         case 'large':
+            console.log('[INFO] Step 8: Presenting large widget preview.');
             await widget.presentLarge();
             break;
         default:
+            console.log('[INFO] Step 8: Presenting medium widget preview.');
             await widget.presentMedium();
     }
 }
 
 Script.setWidget(widget);
 Script.complete();
+console.log('[INFO] Step 9: Script finished.');
