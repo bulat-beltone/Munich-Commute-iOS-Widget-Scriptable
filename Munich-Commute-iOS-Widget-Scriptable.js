@@ -133,7 +133,7 @@ if (userTransportTypes) {
     });
 }
 
-// Known widget pixel dimensions for selected devices (screen height as key)
+// Known widget pixel dimensions for selected devices (screenshot height in pixels as key)
 const DEVICE_WIDGET_SIZES = {
     2778: { // iPhone 12 Pro Max and similar
         small: { width: 510, height: 510 },
@@ -145,15 +145,15 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 1014, height: 474 },
         large: { width: 1014, height: 1062 }
     },
-    2796: { // iPhone 14 Pro Max, 15 Plus, 15 Pro Max
-        small: { width: 528, height: 528 },
-        medium: { width: 1116, height: 528 },
-        large: { width: 1116, height: 1152 }
+    2796: { // iPhone 14 Pro Max / 15 Plus / 15 Pro Max / 16 Plus
+        small:  { width: 510, height: 510 },
+        medium: { width: 1092, height: 510 },
+        large:  { width: 1092, height: 1146 }
     },
-    2556: { // iPhone 14 Pro, 15, 15 Pro
-        small: { width: 480, height: 480 },
-        medium: { width: 1032, height: 480 },
-        large: { width: 1032, height: 1080 }
+    2556: { // iPhone 14 Pro / 15 / 15 Pro / 16
+        small:  { width: 474, height: 474 },
+        medium: { width: 1017, height: 474 },
+        large:  { width: 1017, height: 1062 }
     },
     2688: { // iPhone 11 Pro Max, XS Max
         small: { width: 507, height: 507 },
@@ -165,12 +165,7 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 720, height: 338 },
         large: { width: 720, height: 758 }
     },
-    2340: { // iPhone 12 mini, 13 mini
-        small: { width: 450, height: 450 },
-        medium: { width: 936, height: 450 },
-        large: { width: 936, height: 990 }
-    },
-    2436: { // iPhone X/XS/11 Pro
+    2436: { // iPhone minis and 5.8" X/XS/11 Pro
         small: { width: 465, height: 465 },
         medium: { width: 987, height: 465 },
         large: { width: 987, height: 1035 }
@@ -200,12 +195,12 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 584, height: 282 },
         large: { width: 584, height: 622 }
     },
-    3024: { // iPhone 16 Pro Max (estimated)
+    2868: { // iPhone 16 Pro Max
         small: { width: 558, height: 558 },
         medium: { width: 1209, height: 558 },
         large: { width: 1209, height: 1270 }
     },
-    2910: { // iPhone 16/16 Pro (estimated)
+    2622: { // iPhone 16 Pro
         small: { width: 537, height: 537 },
         medium: { width: 1164, height: 537 },
         large: { width: 1164, height: 1212 }
@@ -213,14 +208,14 @@ const DEVICE_WIDGET_SIZES = {
 };
 
 function getWidgetDimensions(family) {
-    const heightKey = Device.screenSize().height.toString();
+    const heightKey = Device.screenResolution().height.toString();
     const mapping = DEVICE_WIDGET_SIZES[heightKey];
     if (mapping && mapping[family]) {
         return mapping[family];
     }
 
-    const screenWidth = Device.screenSize().width;
-    const screenHeight = Device.screenSize().height;
+    const screenWidth = Device.screenResolution().width;
+    const screenHeight = Device.screenResolution().height;
     switch (family) {
         case 'small':
             return { width: screenWidth / 2, height: screenWidth / 2 };
@@ -421,7 +416,7 @@ async function createWidget() {
     const { width: widgetWidth, height: widgetHeight } = getWidgetDimensions(widgetSize);
 
     // Log device information and widget dimensions for debugging
-    const deviceHeight = Device.screenSize().height.toString();
+    const deviceHeight = Device.screenResolution().height.toString();
     const knownDevice = DEVICE_WIDGET_SIZES[deviceHeight] ? 'known' : 'unknown';
     console.log(
         `Device ${Device.model()} (${deviceHeight}px ${knownDevice}) -> ${widgetSize} ${widgetWidth}x${widgetHeight}`
