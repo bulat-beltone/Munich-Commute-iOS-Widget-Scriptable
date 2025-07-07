@@ -133,7 +133,7 @@ if (userTransportTypes) {
     });
 }
 
-// Known widget pixel dimensions for selected devices (screen height as key)
+// Known widget pixel dimensions for selected devices (screenshot height in pixels as key)
 const DEVICE_WIDGET_SIZES = {
     2778: { // iPhone 12 Pro Max and similar
         small: { width: 510, height: 510 },
@@ -145,15 +145,15 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 1014, height: 474 },
         large: { width: 1014, height: 1062 }
     },
-    2796: { // iPhone 14 Pro Max, 15 Plus, 15 Pro Max
-        small: { width: 528, height: 528 },
-        medium: { width: 1116, height: 528 },
-        large: { width: 1116, height: 1152 }
+    2796: { // iPhone 14 Pro Max / 15 Plus / 15 Pro Max / 16 Plus
+        small:  { width: 510, height: 510 },
+        medium: { width: 1092, height: 510 },
+        large:  { width: 1092, height: 1146 }
     },
-    2556: { // iPhone 14 Pro, 15, 15 Pro
-        small: { width: 480, height: 480 },
-        medium: { width: 1032, height: 480 },
-        large: { width: 1032, height: 1080 }
+    2556: { // iPhone 14 Pro / 15 / 15 Pro / 16
+        small:  { width: 474, height: 474 },
+        medium: { width: 1017, height: 474 },
+        large:  { width: 1017, height: 1062 }
     },
     2688: { // iPhone 11 Pro Max, XS Max
         small: { width: 507, height: 507 },
@@ -165,12 +165,7 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 720, height: 338 },
         large: { width: 720, height: 758 }
     },
-    2340: { // iPhone 12 mini, 13 mini
-        small: { width: 450, height: 450 },
-        medium: { width: 936, height: 450 },
-        large: { width: 936, height: 990 }
-    },
-    2436: { // iPhone X/XS/11 Pro
+    2436: { // iPhone minis and 5.8" X/XS/11 Pro
         small: { width: 465, height: 465 },
         medium: { width: 987, height: 465 },
         large: { width: 987, height: 1035 }
@@ -200,12 +195,12 @@ const DEVICE_WIDGET_SIZES = {
         medium: { width: 584, height: 282 },
         large: { width: 584, height: 622 }
     },
-    3024: { // iPhone 16 Pro Max (estimated)
+    2868: { // iPhone 16 Pro Max
         small: { width: 558, height: 558 },
         medium: { width: 1209, height: 558 },
         large: { width: 1209, height: 1270 }
     },
-    2910: { // iPhone 16/16 Pro (estimated)
+    2622: { // iPhone 16 Pro
         small: { width: 537, height: 537 },
         medium: { width: 1164, height: 537 },
         large: { width: 1164, height: 1212 }
@@ -213,14 +208,14 @@ const DEVICE_WIDGET_SIZES = {
 };
 
 function getWidgetDimensions(family) {
-    const heightKey = Device.screenSize().height.toString();
+    const heightKey = Device.screenResolution().height.toString();
     const mapping = DEVICE_WIDGET_SIZES[heightKey];
     if (mapping && mapping[family]) {
         return mapping[family];
     }
 
-    const screenWidth = Device.screenSize().width;
-    const screenHeight = Device.screenSize().height;
+    const screenWidth = Device.screenResolution().width;
+    const screenHeight = Device.screenResolution().height;
     switch (family) {
         case 'small':
             return { width: screenWidth / 2, height: screenWidth / 2 };
@@ -238,7 +233,6 @@ const WIDGET_CONFIG = {
         itemsCount: 2,
         columnHeight: 30,
         spacing: 4,
-        padding: 3,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(13),        // Station name font
@@ -268,7 +262,6 @@ const WIDGET_CONFIG = {
         itemsCount: 2,
         columnHeight: 30,
         spacing: 4,
-        padding: 3,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(13),        // Station name font
@@ -296,7 +289,6 @@ const WIDGET_CONFIG = {
         itemsCount: 6,
         columnHeight: 40,
         spacing: 8,
-        padding: 5,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(20),        // Station name font
@@ -421,7 +413,7 @@ async function createWidget() {
     const { width: widgetWidth, height: widgetHeight } = getWidgetDimensions(widgetSize);
 
     // Log device information and widget dimensions for debugging
-    const deviceHeight = Device.screenSize().height.toString();
+    const deviceHeight = Device.screenResolution().height.toString();
     const knownDevice = DEVICE_WIDGET_SIZES[deviceHeight] ? 'known' : 'unknown';
     console.log(
         `Device ${Device.model()} (${deviceHeight}px ${knownDevice}) -> ${widgetSize} ${widgetWidth}x${widgetHeight}`
@@ -469,11 +461,8 @@ async function createWidget() {
     // Use default system padding instead of manual values
     widget.useDefaultPadding();
 
-    // Calculate content width based on column sizes and spacing and ensure it does not exceed the widget width
-    const contentWidth = Math.min(
-        widgetWidth,
-        widgetConfig.lineBadgeSize.width + widgetConfig.destinationColumnSize.width + widgetConfig.departureTimeColumnSize.width + 2 * widgetConfig.spacing
-    );
+    // Calculate content width based on column sizes and spacing
+    const contentWidth = widgetConfig.lineBadgeSize.width + widgetConfig.destinationColumnSize.width + widgetConfig.departureTimeColumnSize.width + 2 * widgetConfig.spacing;
 
     // Create main vertical stack for all widget content
     const mainStack = widget.addStack();
@@ -565,55 +554,28 @@ async function createWidget() {
 
 
         // Calculate actual departure time, accounting for delays
-        // Use realtimeDepartureTime if available, otherwise calculate from plannedDepartureTime and delayInMinutes
-        let recalculatedTime = departures[i].realtimeDepartureTime;
-        if (typeof recalculatedTime !== 'number' && typeof departures[i].plannedDepartureTime === 'number' && typeof departures[i].delayInMinutes === 'number') {
-            recalculatedTime = departures[i].plannedDepartureTime + (departures[i].delayInMinutes * 60 * 1000);
-        }
+        const { recalculatedTime, isDelayed } = calculateDeparture(
+            departures[i].delay,
+            departures[i].realtimeDepartureTime
+        );
         // Subtract CONFIG.subtractMinutes from recalculatedTime
         const adjustedTime = recalculatedTime - (CONFIG.subtractMinutes * 60 * 1000);
-
-        if (departures[i].delayInMinutes > 0) {
-            // If delayed, show planned and delayed minutes together: HH:MM-mm
-            const timeRowStack = infoStack.addStack();
-            timeRowStack.layoutHorizontally();
-            timeRowStack.centerAlignContent();
-
-            // Planned/original time (white)
-            const plannedDate = new Date(departures[i].plannedDepartureTime - (CONFIG.subtractMinutes * 60 * 1000));
-            const plannedTimeStr = formatDepartureTime(plannedDate);
-            const plannedTimeText = timeRowStack.addText(plannedTimeStr + '-');
-            plannedTimeText.textColor = Color.white();
+        // Time row (no need for a separate horizontal stack)
+        const departureTime = infoStack.addText(formatDepartureTime(adjustedTime));
+        
+        // Make the first train time bigger and bolder
             if (i === 0) {
-                plannedTimeText.font = widgetConfig.departurePrimaryFont;
+            departureTime.font = widgetConfig.departurePrimaryFont;
             } else {
-                plannedTimeText.font = widgetConfig.departureSecondaryFont;
+            departureTime.font = widgetConfig.departureSecondaryFont;
             }
-            plannedTimeText.centerAlignText();
 
-            // Only minutes part of delayed/actual time (red)
-            const delayedDate = new Date(adjustedTime);
-            const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
-            const delayedTimeText = timeRowStack.addText(delayedMinutes);
-            delayedTimeText.textColor = new Color('#DB5C5C');
-            if (i === 0) {
-                delayedTimeText.font = widgetConfig.departurePrimaryFont;
-            } else {
-                delayedTimeText.font = widgetConfig.departureSecondaryFont;
-            }
-            delayedTimeText.centerAlignText();
+        if (departures[i].delay > 0) {
+            departureTime.textColor = new Color("#DB3B4B"); // Red for delayed
+        } else if (departures[i].delay < 0) {
+            departureTime.textColor = new Color("#16BAE7"); // Optional: blue for early
         } else {
-            // Not delayed, show only main time in white
-            const timeRowStack = infoStack.addStack();
-            timeRowStack.layoutHorizontally();
-            timeRowStack.centerAlignContent();
-            const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
-            mainTime.textColor = Color.white();
-            if (i === 0) {
-                mainTime.font = widgetConfig.departurePrimaryFont;
-            } else {
-                mainTime.font = widgetConfig.departureSecondaryFont;
-            }
+            departureTime.textColor = Color.white();
         }
 
 
