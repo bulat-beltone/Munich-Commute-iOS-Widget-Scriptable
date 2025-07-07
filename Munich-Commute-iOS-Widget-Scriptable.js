@@ -52,7 +52,10 @@ const CONFIG = {
             top: "#1F4747",
             bottom: "#0B1E1E"
         }
-    }
+    },
+
+    // Padding in pixels for all widget sizes
+    widgetPaddingPx: 16
 };
 
 // Parse widget parameters
@@ -233,7 +236,6 @@ const WIDGET_CONFIG = {
         itemsCount: 2,
         columnHeight: 30,
         spacing: 4,
-        padding: 3,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(13),        // Station name font
@@ -263,7 +265,6 @@ const WIDGET_CONFIG = {
         itemsCount: 2,
         columnHeight: 30,
         spacing: 4,
-        padding: 3,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(13),        // Station name font
@@ -291,7 +292,6 @@ const WIDGET_CONFIG = {
         itemsCount: 6,
         columnHeight: 40,
         spacing: 8,
-        padding: 5,
 
         // Header section (station name and current time)
         stationNameFont: Font.semiboldSystemFont(20),        // Station name font
@@ -461,17 +461,17 @@ async function createWidget() {
     gradient.locations = [0.0, 1.0];
     widget.backgroundGradient = gradient;
     
-    // Use default system padding instead of manual values
-    widget.useDefaultPadding();
+    // Set padding from CONFIG.widgetPaddingPx (in px), converted to points
+    const padding = CONFIG.widgetPaddingPx / Device.screenScale();
+    widget.setPadding(padding, padding, padding, padding);
 
-    // Calculate content width based on column sizes and spacing and ensure it does not exceed the widget width
-    const contentWidth = Math.min(
-        widgetWidth,
-        widgetConfig.lineBadgeSize.width + widgetConfig.destinationColumnSize.width + widgetConfig.departureTimeColumnSize.width + 2 * widgetConfig.spacing
-    );
+    // Calculate content width and height based on widget size and padding
+    const contentWidth = widgetWidth - 2 * padding;
+    const contentHeight = widgetHeight - 2 * padding;
 
     // Create main vertical stack for all widget content
     const mainStack = widget.addStack();
+    mainStack.size = new Size(contentWidth, contentHeight);
     mainStack.layoutVertically();
     mainStack.topAlignContent();
 
@@ -512,7 +512,7 @@ async function createWidget() {
     for (let i = 0; i < Math.min(widgetConfig.itemsCount, departures.length); i++) {
         // Create horizontal stack for this departure row
         const rowStack = mainStack.addStack();
-        rowStack.size = new Size(contentWidth, 0); 
+        rowStack.size = new Size(contentWidth, 0); // Fill available width, auto height
         rowStack.layoutHorizontally();
         rowStack.topAlignContent();
 
