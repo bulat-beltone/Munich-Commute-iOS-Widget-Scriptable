@@ -597,10 +597,13 @@ async function createWidget() {
             }
             plannedTimeText.centerAlignText();
 
+            // Add 4px spacing
+            timeRowStack.addSpacer(4);
+
             // Colon and delayed minutes (bold, red, same font as planned time)
             const delayedDate = new Date(adjustedTime);
             const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
-            const colonMinutesText = timeRowStack.addText(' :' + delayedMinutes);
+            const colonMinutesText = timeRowStack.addText(':' + delayedMinutes);
             colonMinutesText.textColor = new Color('#DB5C5C');
             if (i === 0) {
                 colonMinutesText.font = widgetConfig.departurePrimaryFont;
