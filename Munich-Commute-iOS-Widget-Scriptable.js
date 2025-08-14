@@ -3,11 +3,11 @@
 // icon-color: deep-green; icon-glyph: subway;
 // noinspection LanguageDetectionInspection
 
-// Updated July 6, 2025 - Added support for iPhone 16 Pro Max and 16 Pro
+// Updated July 7, 2025
 // Check for updates here: https://github.com/bulat-beltone/Munich-Commute-iOS-Widget-Scriptable
 
 // Example usage:
-// station:Marienplatz; types:sbahn,ubahn,tram; platform:1; lines:S1; gradient:purple;
+// station: Marienplatz; types: sbahn; platform: 1; lines: S1; gradient: purple;
 
 // Configuration
 const CONFIG = {
@@ -340,9 +340,11 @@ const LINE_COLORS = {
         S5: "#005E82",
         S6: "#00975F",
         S7: "#A6372B",
-        S8: "#ffffff1a", // transparent white
-        S8_fg: "#f3bc31", // yellow text
-        S20: "#E84563"
+        S20: "#E84563",
+        
+        // S8 is a special case, it has a black background and a yellow text color
+        S8: "#ffffff1a", // transparent white 10% to have a contrast with black background
+        S8_fg: "#f3bc31" // yellow text
     },
     BUS: "#00586A",
     REGIONAL_BUS: "#4682B4",
