@@ -54,17 +54,7 @@ lines:S1,S2,U3
 ```
 Show only specific lines (comma-separated).
 
-#### Transport Type Filtering
-```
-types:sbahn,ubahn,tram
-```
-Show only specific transport types. Available types:
-- `sbahn` - S-Bahn
-- `ubahn` - U-Bahn  
-- `bus` - City buses
-- `regional_bus` - Regional buses
-- `tram` - Trams
-- `bahn` - Regional trains
+
 
 #### Visual Themes
 ```
@@ -85,19 +75,14 @@ Choose from available gradients:
 station:Hauptbahnhof
 ```
 
-#### S-Bahn only with blue theme
-```
-station:Marienplatz;types:sbahn;gradient:blue
-```
-
 #### Specific platform and lines
 ```
 station:Ostbahnhof;platform:2;lines:S1,S2;gradient:green
 ```
 
-#### Multiple transport types with custom theme
+#### Simple station widget
 ```
-station:Sendlinger Tor;types:sbahn,ubahn,tram;gradient:purple
+station:Sendlinger Tor;gradient:purple
 ```
 
 ## Widget Sizes
@@ -122,7 +107,7 @@ The script includes several customization options in the `CONFIG` object:
 
 - **Departure limit**: Maximum number of departures to fetch (default: 80)
 - **Time offset**: Only show connections X minutes in the future (default: 0)
-- **Transport types**: Enable/disable specific transport types
+- **Transport types**: All types enabled by default (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
 - **Visual themes**: Customize gradient colors
 
 ## Troubleshooting

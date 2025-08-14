@@ -61,7 +61,6 @@ let userStation = "Marienplatz";
 let userPlatforms = null;
 let userLines = null;
 let userGradient = "grey"; // Default gradient
-let userTransportTypes = null;
 
 // Parse parameters in any order
 parameters.forEach(param => {
@@ -94,44 +93,10 @@ parameters.forEach(param => {
                 userGradient = value.toLowerCase();
             }
             break;
-        case "types":
-            userTransportTypes = value ? value.split(",").map(type => type.trim()) : null;
-            break;
     }
 });
 
-// Apply transport type settings if specified
-if (userTransportTypes) {
-    // Reset all transport types to false first
-    Object.keys(CONFIG.transportTypes).forEach(key => {
-        CONFIG.transportTypes[key] = false;
-    });
-    
-    // Enable only the specified types
-    userTransportTypes.forEach(type => {
-        const typeKey = type.toLowerCase();
-        switch (typeKey) {
-            case "sbahn":
-                CONFIG.transportTypes.sbahn = true;
-                break;
-            case "ubahn":
-                CONFIG.transportTypes.ubahn = true;
-                break;
-            case "bus":
-                CONFIG.transportTypes.bus = true;
-                break;
-            case "regional_bus":
-                CONFIG.transportTypes.regionalBus = true;
-                break;
-            case "tram":
-                CONFIG.transportTypes.tram = true;
-                break;
-            case "bahn":
-                CONFIG.transportTypes.train = true;
-                break;
-        }
-    });
-}
+
 
 // Known widget pixel dimensions for selected devices (screenshot height in pixels as key)
 const DEVICE_WIDGET_SIZES = {
@@ -655,7 +620,7 @@ console.log(`[INFO]   - Station: '${userStation}'`);
 console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
 console.log(`[INFO]   - Lines: '${userLines}'`);
 console.log(`[INFO]   - Gradient: '${userGradient}'`);
-console.log(`[INFO]   - Transport Types: '${userTransportTypes}'`);
+console.log(`[INFO]   - Transport Types: using default configuration`);
 const widget = await createWidget();
 console.log('[INFO] Step 7: Widget construction complete.');
 
