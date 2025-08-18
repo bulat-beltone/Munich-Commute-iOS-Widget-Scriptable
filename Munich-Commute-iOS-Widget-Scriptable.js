@@ -480,6 +480,7 @@ async function createWidget() {
         rowStack.topAlignContent();
         const lineBadgeContainer = rowStack.addStack();
         lineBadgeContainer.layoutVertically();
+        lineBadgeContainer.setPadding(i === 0 ? 8 : 4, 0, 0, 0); // 8px for first, 4px for rest
         const lineStack = lineBadgeContainer.addStack();
         lineStack.size = widgetConfig.lineBadgeSize;
         console.log(`[DEBUG] lineStack.size set to: width=${widgetConfig.lineBadgeSize.width}, height=${widgetConfig.lineBadgeSize.height}`);
