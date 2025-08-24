@@ -9,6 +9,44 @@
 // Example usage:
 // station:Marienplatz; types:sbahn,ubahn,tram; platform:1; lines:S1; gradient:purple;
 
+// Munich's biggest stations from Pasing to Isartor
+const MUNICH_STATIONS = [
+    "Pasing",
+    "Laim",
+    "Hirschgarten",
+    "Donnersbergerbrücke",
+    "Hackerbrücke",
+    "Hauptbahnhof",
+    "Karlsplatz (Stachus)",
+    "Marienplatz",
+    "Isartor"
+];
+
+// Interactive station selection when run from Scriptable app
+async function selectStation() {
+    if (!config.runInWidget) {
+        const alert = new Alert();
+        alert.title = "Select Munich Station";
+        alert.message = "Choose a station to monitor:";
+        
+        // Add station options
+        MUNICH_STATIONS.forEach(station => {
+            alert.addAction(station);
+        });
+        
+        alert.addCancelAction("Cancel");
+        
+        const stationIndex = await alert.presentAlert();
+        
+        if (stationIndex !== -1) {
+            return MUNICH_STATIONS[stationIndex];
+        } else {
+            return "Marienplatz"; // Default fallback
+        }
+    }
+    return null; // Return null when running in widget mode
+}
+
 // Configuration
 const CONFIG = {
     subtractMinutes: 1, // Subtract this many minutes from current time display
@@ -645,6 +683,16 @@ async function createWidget() {
 
 // Main execution
 console.log('[INFO] Munich Commute Widget script started');
+
+// Interactive station selection when running from Scriptable app
+if (!config.runInWidget) {
+    const selectedStation = await selectStation();
+    if (selectedStation) {
+        userStation = selectedStation;
+        console.log(`[INFO] User selected station: '${userStation}'`);
+    }
+}
+
 console.log('[INFO] Step 1: Parsing parameters...');
 console.log(`[INFO]   - Station: '${userStation}'`);
 console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
