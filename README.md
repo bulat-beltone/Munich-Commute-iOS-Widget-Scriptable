@@ -5,6 +5,7 @@ Works based on Scriptable app.
 
 ## Features
 
+- **Interactive station selection** - Choose from Munich's biggest stations when running from Scriptable app
 - **Filtering** by transport types or platform
 - **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
 - **Real-time departures** using official MVV API
@@ -31,6 +32,21 @@ Color options:
 2. Long press the widget and select "Edit Widget"
 3. Choose your script from the list
 4. Optionally add parameters (see Configuration section)
+
+### Interactive Station Selection
+When you run the script directly from the Scriptable app (not as a widget), you'll be prompted to select a station from Munich's biggest stations:
+
+- **Pasing**
+- **Laim**
+- **Hirschgarten**
+- **Donnersbergerbrücke**
+- **Hackerbrücke**
+- **Hauptbahnhof**
+- **Karlsplatz (Stachus)**
+- **Marienplatz**
+- **Isartor**
+
+This feature is perfect for quickly checking different stations without editing widget parameters.
 
 ### Configuration Parameters
 
