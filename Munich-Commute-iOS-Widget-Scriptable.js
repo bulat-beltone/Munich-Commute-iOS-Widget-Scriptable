@@ -513,7 +513,7 @@ async function createWidget() {
         rowStack.topAlignContent();
         
         // For medium and large sizes, add platform display on the right
-        if ((widgetSize === 'medium' || widgetSize === 'large') && departures[i].platform) {
+        if (widgetSize === 'medium' || widgetSize === 'large') {
             // Create platform badge on the right
             const platformContainer = rowStack.addStack();
             platformContainer.layoutVertically();
@@ -524,10 +524,13 @@ async function createWidget() {
             platformStack.backgroundColor = platformStack.backgroundColor.withAlpha(0.12); // 12% opacity
             platformStack.cornerRadius = 6; // Rounded square
             
-            const platformText = platformStack.addText(departures[i].platform.toString());
-            platformText.font = Font.boldSystemFont(10);
-            platformText.textColor = Color.white();
-            platformText.centerAlignText();
+            // Only add platform text if platform data exists
+            if (departures[i].platform) {
+                const platformText = platformStack.addText(departures[i].platform.toString());
+                platformText.font = Font.boldSystemFont(10);
+                platformText.textColor = Color.white();
+                platformText.centerAlignText();
+            }
             
             // Add spacing between platform and main content
             rowStack.addSpacer(8);
