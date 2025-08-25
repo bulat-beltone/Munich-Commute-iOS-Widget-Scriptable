@@ -7,6 +7,8 @@
 // Check for updates here: https://github.com/bulat-beltone/Munich-Commute-iOS-Widget-Scriptable
 
 // Example usage:
+// Marienplatz; types:sbahn,ubahn,tram; platform:1; lines:S1; gradient:purple;
+// or with station: label (backward compatibility):
 // station:Marienplatz; types:sbahn,ubahn,tram; platform:1; lines:S1; gradient:purple;
 
 // Configuration
@@ -68,35 +70,41 @@ parameters.forEach(param => {
     const trimmedParam = param.trim();
     if (!trimmedParam) return;
 
-    // Split into key and value
-    const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
-    const value = valueParts.join(":").trim(); // Rejoin in case there are colons in the value
+    // Check if this parameter has a colon (key:value format)
+    if (trimmedParam.includes(":")) {
+        // Split into key and value
+        const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
+        const value = valueParts.join(":").trim(); // Rejoin in case there are colons in the value
 
-    switch (key.toLowerCase()) {
-        case "station":
-            userStation = value;
-            break;
-        case "platform":
-            userPlatforms = value ? Number(value) : null;
-            break;
-        case "lines":
-            userLines = value ? value.split(",").map(line => line.trim()) : null;
-            break;
-        case "gradient":
-            // Check if the gradient exists in our config
-            if (CONFIG.gradients[value.toLowerCase()]) {
-                userGradient = value.toLowerCase();
-            }
-            break;
-        case "background": // For backward compatibility
-            // If it's a valid gradient name, use it
-            if (CONFIG.gradients[value.toLowerCase()]) {
-                userGradient = value.toLowerCase();
-            }
-            break;
-        case "types":
-            userTransportTypes = value ? value.split(",").map(type => type.trim()) : null;
-            break;
+        switch (key.toLowerCase()) {
+            case "station":
+                userStation = value;
+                break;
+            case "platform":
+                userPlatforms = value ? Number(value) : null;
+                break;
+            case "lines":
+                userLines = value ? value.split(",").map(line => line.trim()) : null;
+                break;
+            case "gradient":
+                // Check if the gradient exists in our config
+                if (CONFIG.gradients[value.toLowerCase()]) {
+                    userGradient = value.toLowerCase();
+                }
+                break;
+            case "background": // For backward compatibility
+                // If it's a valid gradient name, use it
+                if (CONFIG.gradients[value.toLowerCase()]) {
+                    userGradient = value.toLowerCase();
+                }
+                break;
+            case "types":
+                userTransportTypes = value ? value.split(",").map(type => type.trim()) : null;
+                break;
+        }
+    } else {
+        // No colon found - treat as station name (most important parameter)
+        userStation = trimmedParam;
     }
 });
 

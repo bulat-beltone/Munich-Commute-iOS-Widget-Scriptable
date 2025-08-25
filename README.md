@@ -38,9 +38,14 @@ Configure the widget by adding parameters in the widget settings. Use semicolons
 
 #### Station Configuration
 ```
+Marienplatz
+```
+Set the station name you want to monitor. The station name is the most important parameter and can be specified without any label.
+
+For backward compatibility, you can also use:
+```
 station:Marienplatz
 ```
-Set the station name you want to monitor.
 
 #### Platform Filtering
 ```
@@ -82,22 +87,22 @@ Choose from available gradients:
 
 #### Simple station widget
 ```
-station:Hauptbahnhof
+Hauptbahnhof
 ```
 
 #### S-Bahn only with blue theme
 ```
-station:Marienplatz;types:sbahn;gradient:blue
+Marienplatz;types:sbahn;gradient:blue
 ```
 
 #### Specific platform and lines
 ```
-station:Ostbahnhof;platform:2;lines:S1,S2;gradient:green
+Ostbahnhof;platform:2;lines:S1,S2;gradient:green
 ```
 
 #### Multiple transport types with custom theme
 ```
-station:Sendlinger Tor;types:sbahn,ubahn,tram;gradient:purple
+Sendlinger Tor;types:sbahn,ubahn,tram;gradient:purple
 ```
 
 ## Widget Sizes
