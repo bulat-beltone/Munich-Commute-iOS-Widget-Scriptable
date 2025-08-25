@@ -94,6 +94,7 @@ station:Marienplatz;types:sbahn;gradient:blue
 ```
 station:Ostbahnhof;platform:2;lines:S1,S2;gradient:green
 ```
+*Displays as: "Ostbahnhof, platform: 2, line: S1, S2"*
 
 #### Multiple transport types with custom theme
 ```

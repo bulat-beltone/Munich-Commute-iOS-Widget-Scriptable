@@ -8,6 +8,7 @@
 
 // Example usage:
 // station:Marienplatz; types:sbahn,ubahn,tram; platform:1; lines:S1; gradient:purple;
+// Displays as: "Marienplatz, platform: 1, line: S1"
 
 // Configuration
 const CONFIG = {
@@ -494,8 +495,20 @@ async function createWidget() {
     tramIcon.imageSize = widgetConfig.iconSize; // Use the icon size from widget config
     tramIcon.tintColor = Color.white();
     
-    // Display station name, removing "München-" prefix if present
-    const stationName = titleStack.addText(userStation.replace(/^München-/, ''));
+    // Display station name with platform and line information
+    let stationDisplayText = userStation.replace(/^München-/, '');
+    
+    // Add platform information if specified
+    if (userPlatforms) {
+        stationDisplayText += `, platform: ${userPlatforms}`;
+    }
+    
+    // Add line information if specified
+    if (userLines && userLines.length > 0) {
+        stationDisplayText += `, line: ${userLines.join(', ')}`;
+    }
+    
+    const stationName = titleStack.addText(stationDisplayText);
     stationName.textColor = Color.white();
     stationName.leftAlignText();
     stationName.font = widgetConfig.stationNameFont;
