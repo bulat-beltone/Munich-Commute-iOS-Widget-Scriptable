@@ -441,10 +441,28 @@ async function createWidget() {
     console.log(`[INFO]   - Departures fetched: ${departures.length}`);
 
     console.log('[INFO] Step 5: Filtering departures by user preferences...');
+    console.log(`[INFO]   - Filter criteria: lines=${JSON.stringify(userLines)}, platform=${userPlatforms} (type: ${typeof userPlatforms})`);
+    
+    // Log all departures before filtering for diagnostics
+    departures.forEach((entry, idx) => {
+        console.log(`[FILTER] Raw departure #${idx}: label="${entry.label}" (type: ${typeof entry.label}), platform=${entry.platform} (type: ${typeof entry.platform}), destination="${entry.destination}", transportType="${entry.transportType}"`);
+    });
+    
     departures = departures.filter(entry => {
-        const lineMatches = userLines ? userLines.includes(entry.label) : true;
-        const platformMatches = userPlatforms ? entry.platform === userPlatforms : true;
-        return lineMatches && platformMatches;
+        // Case-insensitive line matching to handle API variations (e.g. "s3" vs "S3")
+        const lineMatches = userLines 
+            ? userLines.some(line => line.toLowerCase() === entry.label?.toLowerCase()) 
+            : true;
+        // Loose equality (==) for platform to handle string/number type mismatches from API
+        const platformMatches = userPlatforms != null ? entry.platform == userPlatforms : true;
+        
+        const kept = lineMatches && platformMatches;
+        if (!kept) {
+            console.log(`[FILTER] REJECTED: label="${entry.label}" lineMatches=${lineMatches}, platform=${entry.platform} platformMatches=${platformMatches}, destination="${entry.destination}"`);
+        } else {
+            console.log(`[FILTER] KEPT: label="${entry.label}", platform=${entry.platform}, destination="${entry.destination}"`);
+        }
+        return kept;
     });
     console.log(`[INFO]   - Departures after filter: ${departures.length}`);
 
