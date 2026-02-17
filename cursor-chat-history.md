@@ -34,3 +34,9 @@
 - `getStationId()` now prefers exact name match (case-insensitive) over first result
 - Falls back to first STATION if no exact match
 - Added logging showing matched station name and warning if no exact match found
+
+**Fix applied (round 3):**
+- `getStationId()` now returns `{ globalId, name }` instead of just the ID
+- `createWidget()` updates `userStation` to the real API-matched name
+- Widget header now shows the actual station name from the API, not the user-typed string
+- Prevents misleading display when API matches a different station than typed

@@ -372,7 +372,7 @@ async function getStationId(stationName) {
         }
     }
     
-    return selectedStation?.globalId || null;
+    return selectedStation ? { globalId: selectedStation.globalId, name: selectedStation.name } : null;
 }
 
 async function getDepartures(globalId) {
@@ -411,13 +411,15 @@ async function createWidget() {
     console.log(`[INFO]   - Device: ${deviceModel} (${deviceHeight}px)`);
 
     console.log('[INFO] Step 3: Fetching station ID...');
-    const globalId = await getStationId(userStation);
-    if (!globalId) {
+    const stationResult = await getStationId(userStation);
+    if (!stationResult) {
         let errorWidget = new ListWidget();
         errorWidget.addText("Station not found");
         console.log(`[ERROR]   - Station not found for name: ${userStation}`);
         return errorWidget;
     }
+    const globalId = stationResult.globalId;
+    userStation = stationResult.name; // Use the actual station name from the API
     console.log(`[INFO]   - Station ID found: ${globalId}`);
 
     console.log('[INFO] Step 4: Fetching departures from MVG API...');
