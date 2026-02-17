@@ -359,8 +359,20 @@ async function getStationId(stationName) {
     const url = `https://www.mvg.de/api/bgw-pt/v3/locations?query=${formattedStation}`;
     const response = await new Request(url).loadJSON();
     
-    const firstStation = response.find(entry => entry.type === "STATION");
-    return firstStation?.globalId || null;
+    const stations = response.filter(entry => entry.type === "STATION");
+    
+    // Prefer exact name match (case-insensitive) to avoid e.g. "Berg am Laim" when user wants "Laim"
+    const exactMatch = stations.find(s => s.name.toLowerCase() === stationName.toLowerCase());
+    const selectedStation = exactMatch || stations[0] || null;
+    
+    if (selectedStation) {
+        console.log(`[INFO]   - Station matched: "${selectedStation.name}" (globalId: ${selectedStation.globalId})`);
+        if (!exactMatch && stations.length > 1) {
+            console.log(`[WARN]   - No exact match for "${stationName}". Using first result. Available: ${stations.slice(0, 5).map(s => s.name).join(', ')}`);
+        }
+    }
+    
+    return selectedStation?.globalId || null;
 }
 
 async function getDepartures(globalId) {
