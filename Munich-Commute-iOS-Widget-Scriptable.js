@@ -55,8 +55,12 @@ const CONFIG = {
     }
 };
 
+// Default parameters when widget has none set (same format as widget parameter string)
+const DEFAULT_WIDGET_PARAMETERS = "station:Laim; platform:1; lines:S3, S4";
+
 // Parse widget parameters
-const parameters = args.widgetParameter ? args.widgetParameter.split(";") : [];
+const paramString = (args.widgetParameter || DEFAULT_WIDGET_PARAMETERS).trim();
+const parameters = paramString ? paramString.split(";") : [];
 let userStation = "Marienplatz";
 let userPlatforms = null;
 let userLines = null;
