@@ -3,16 +3,19 @@
 // icon-color: deep-green; icon-glyph: subway;
 // noinspection LanguageDetectionInspection
 
-// Updated July 7, 2025
+// Updated Feb 17, 2026
 // Check for updates here: https://github.com/bulat-beltone/Munich-Commute-iOS-Widget-Scriptable
 
 // Example usage:
 // station: Marienplatz; types: sbahn; platform: 1; lines: S1; gradient: purple;
 
+// Default parameters
+const DEFAULT_WIDGET_PARAMETERS = "station: Laim; platform: 1; lines: S3, S4";
+
 // Configuration
 const CONFIG = {
     subtractMinutes: 1, // Subtract this many minutes from current time display
-    
+
     // Transport types to display (true = display, false = hide)
     transportTypes: {
         sbahn: true,
@@ -55,8 +58,6 @@ const CONFIG = {
     }
 };
 
-// Default parameters when widget has none set (same format as widget parameter string)
-const DEFAULT_WIDGET_PARAMETERS = "station:Laim; platform:1; lines:S3, S4";
 
 // Parse widget parameters
 const paramString = (args.widgetParameter || DEFAULT_WIDGET_PARAMETERS).trim();
