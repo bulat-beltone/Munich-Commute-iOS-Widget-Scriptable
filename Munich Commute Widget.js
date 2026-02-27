@@ -15,7 +15,7 @@ const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3,
 
 // Subtract this many minutes from displayed departure times
 const SUBTRACT_MINUTES = 1;
-const SHOW_SUBTRACT_MINUTES = true; // Show "-X" indicator in widget header
+const SHOW_SUBTRACT_MINUTES = false; // Show "-X" indicator in widget header
 
 // Transport types to display (set to false to hide a type)
 const TRANSPORT_TYPES = {
@@ -707,7 +707,7 @@ async function promptForStationSelection() {
 
 async function createSavedStation() {
     const profileNameInput = await askText({
-        title: "Profile name",
+        title: "Saved station name",
         message: "Give this station a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
         placeholder: "Home"
     });
