@@ -3,14 +3,14 @@
 // icon-color: deep-green; icon-glyph: subway;
 // noinspection LanguageDetectionInspection
 
-// Updated Feb 17, 2026
+// Updated 27 Feb, 2026
 // Check for updates here: https://github.com/bulat-beltone/Munich-Commute-iOS-Widget-Scriptable
 
 // Example usage:
 // station: Marienplatz; types: sbahn; platform: 1; lines: S1; gradient: purple;
 
 // Default parameters
-const DEFAULT_WIDGET_PARAMETERS = "station: Laim; platform: 1; lines: S3, S4";
+const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3, S4";
 
 // Configuration
 const CONFIG = {
@@ -222,7 +222,8 @@ const WIDGET_CONFIG = {
 
         // Destination
         destinationFont: Font.caption1(),       // Destination text
-        destinationOpacity: 0.5,                // Destination text opacity
+
+        textWithOpacity: 0.5, // any text with opacity
 
         // Layout sizes
         destinationColumnSize: new Size(60, 15),  // Size for destination column
@@ -251,7 +252,7 @@ const WIDGET_CONFIG = {
 
         // Destination
         destinationFont: Font.caption1(),       // Destination text
-        destinationOpacity: 0.5,                // Destination text opacity
+        textWithOpacity: 0.5,                // Destination text opacity
 
         // Layout sizes
         destinationColumnSize: new Size(240, 15), // Size for destination column
@@ -278,7 +279,7 @@ const WIDGET_CONFIG = {
 
         // Destination
         destinationFont: Font.caption1(),       // Destination text
-        destinationOpacity: 0.5,                // Destination text opacity
+        textWithOpacity: 0.5,                // Destination text opacity
 
         // Layout sizes
         destinationColumnSize: new Size(200, 20), // Size for destination column
@@ -464,7 +465,8 @@ async function createWidget() {
 
     // HEADING - Station Name & Time
     const headerStack = mainStack.addStack();
-    headerStack.layoutVertically();
+    headerStack.layoutHorizontally();
+    headerStack.spacing = 8;
     console.log('[INFO]   - Added header stack');
 
     // Create horizontal stack for the icon and station name
@@ -487,6 +489,15 @@ async function createWidget() {
     stationName.font = widgetConfig.stationNameFont;
     stationName.lineLimit = 1;
     console.log('[INFO]   - Added station name and icon');
+    
+    // Subtract minutes
+    if (CONFIG.subtractMinutes > 0) {
+        headerStack.addSpacer(); // pushes subMins to the right
+        const subMins = headerStack.addText(`-${CONFIG.subtractMinutes}`);
+        subMins.textColor = Color.white();
+        subMins.textOpacity = widgetConfig.textWithOpacity;
+        subMins.font = widgetConfig.stationNameFont;
+    }
 
     // Add space between header and departure information
     mainStack.addSpacer();
@@ -616,7 +627,7 @@ async function createWidget() {
         const destinationName = infoStack.addText(departures[i].destination);
         destinationName.font = widgetConfig.destinationFont;
         destinationName.textColor = Color.white();
-        destinationName.textOpacity = widgetConfig.destinationOpacity;
+        destinationName.textOpacity = widgetConfig.textWithOpacity;
         destinationName.lineLimit = 1;
         
         // Add a spacer to push the contents to the left

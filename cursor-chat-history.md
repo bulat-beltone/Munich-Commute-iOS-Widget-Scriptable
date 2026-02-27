@@ -40,3 +40,18 @@
 - `createWidget()` updates `userStation` to the real API-matched name
 - Widget header now shows the actual station name from the API, not the user-typed string
 - Prevents misleading display when API matches a different station than typed
+
+## Location-aware widget (direction detection)
+
+### Feb 17, 2026
+**Goal:** Widget that uses current GPS location to find closest station and show departures in the right direction (toward home).
+
+**Approach:** Create ordered stop lists for S3/S4 from GTFS data. Compare current stop index vs target stop index to determine travel direction, then filter departures accordingly.
+
+**GTFS data extraction:**
+- Downloaded MVV OpenData GTFS from mvv-muenchen.de (cc-by license)
+- Created `extract-line-stops.js` — reusable script that extracts ordered stops for any line from GTFS data
+- Usage: `node extract-line-stops.js S3` (or S4, U6, etc.)
+- Joins routes.txt → trips.txt → stop_times.txt → stops.txt, picks longest trip, outputs JSON
+- Generated `lineData/S3.json` (31 stops: Mammendorf → Holzkirchen) and `lineData/S4.json` (34 stops: Geltendorf → Ebersberg)
+- Shared Stammstrecke: Pasing → Laim → ... → Marienplatz → ... → Ostbahnhof (stops 10-20 in S3, 11-21 in S4)
