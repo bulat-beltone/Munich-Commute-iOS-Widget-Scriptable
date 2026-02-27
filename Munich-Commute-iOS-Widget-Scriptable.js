@@ -7,7 +7,7 @@
 // Check for updates here: https://github.com/bulat-beltone/Munich-Commute-iOS-Widget-Scriptable
 
 // Example usage:
-// station: Marienplatz; types: sbahn; platform: 1; lines: S1; gradient: purple;
+// Marienplatz; types: sbahn; platform: 1; lines: S1; gradient: purple;
 
 // Default parameters
 const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3, S4";
@@ -66,11 +66,20 @@ let userStation = "Marienplatz";
 let userPlatforms = null;
 let userLines = null;
 let userGradient = "grey"; // Default gradient
+let hasExplicitStation = false;
 
 // Parse parameters in any order
 parameters.forEach(param => {
     const trimmedParam = param.trim();
     if (!trimmedParam) return;
+
+    // Allow first positional parameter to be station name, e.g. "Marienplatz; platform: 1"
+    if (!trimmedParam.includes(":")) {
+        if (!hasExplicitStation) {
+            userStation = trimmedParam;
+        }
+        return;
+    }
 
     // Split into key and value
     const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
@@ -79,6 +88,7 @@ parameters.forEach(param => {
     switch (key.toLowerCase()) {
         case "station":
             userStation = value;
+            hasExplicitStation = true;
             break;
         case "platform":
             userPlatforms = value ? Number(value) : null;

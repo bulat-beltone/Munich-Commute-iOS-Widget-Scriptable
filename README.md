@@ -38,9 +38,9 @@ Configure the widget by adding parameters in the widget settings. Use semicolons
 
 #### Station Configuration
 ```
-station:Marienplatz
+Marienplatz
 ```
-Set the station name you want to monitor.
+Set the station name you want to monitor. You can still use `station:Marienplatz` if you prefer.
 
 #### Platform Filtering
 ```
@@ -72,17 +72,17 @@ Choose from available gradients:
 
 #### Simple station widget
 ```
-station:Hauptbahnhof
+Hauptbahnhof
 ```
 
 #### Specific platform and lines
 ```
-station:Ostbahnhof;platform:2;lines:S1,S2;gradient:green
+Ostbahnhof;platform:2;lines:S1,S2;gradient:green
 ```
 
 #### Simple station widget
 ```
-station:Sendlinger Tor;gradient:purple
+Sendlinger Tor;gradient:purple
 ```
 
 ## Widget Sizes
