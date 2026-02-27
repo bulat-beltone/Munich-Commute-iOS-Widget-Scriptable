@@ -21,13 +21,13 @@ Color options:
 ## Installation
 
 1. Download the [Scriptable app](https://apps.apple.com/app/scriptable/id1405459188) from the App Store
-2. Copy the contents of `Munich-Commute-iOS-Widget-Scriptable.js` to a new script in Scriptable
+2. Copy the contents of `Munich Commute Widget.js` to a new script in Scriptable
 3. Add the script as a widget to your home screen
 
 ## Usage
 
 ### Profile Wizard Script
-You can use `Munich-Commute-Profile-Wizard.js` to create profile files interactively.
+You can use `Munich Commute Widget. Save Station.js` to create profile files interactively.
 
 What it does:
 - asks for profile name, station, optional platform, optional lines

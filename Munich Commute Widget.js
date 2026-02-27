@@ -72,7 +72,7 @@ function resolveWidgetParameter(rawParameter) {
     // Example widget parameter: "Home" -> reads "Home.txt".
     const fileManager = FileManager.iCloud();
     const documentsDirectory = fileManager.documentsDirectory();
-    const profileDirectory = fileManager.joinPath(documentsDirectory, "MunichCommuteWidgetParams");
+    const profileDirectory = fileManager.joinPath(documentsDirectory, "Munich Commute. Saved Stations");
     const profileFileName = `${trimmedParameter}.txt`;
     const profileFileCandidates = [
         fileManager.joinPath(profileDirectory, profileFileName),

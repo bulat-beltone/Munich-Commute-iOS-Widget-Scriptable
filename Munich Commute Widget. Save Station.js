@@ -2,7 +2,7 @@
 // These must be at the very top of the file. Do not edit.
 // icon-color: purple; icon-glyph: magic;
 
-const PROFILE_DIRECTORY_NAME = "MunichCommuteWidgetParams";
+const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
 const AVAILABLE_GRADIENTS = ["grey", "red", "blue", "green", "purple", "teal"];
 
 function formatStationName(station) {
