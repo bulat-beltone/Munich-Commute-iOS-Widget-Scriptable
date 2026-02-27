@@ -52,7 +52,7 @@ const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
 const AVAILABLE_GRADIENTS = ["grey", "red", "blue", "green", "purple", "teal"];
 
 // Fixed secondary departure font (for departures 2-6)
-const DEPARTURE_SECONDARY_FONT = Font.boldSystemFont(15);
+const DEPARTURE_SECONDARY_FONT = Font.boldSystemFont(16);
 
 // ============================================================================
 // WIDGET SIZE CONFIGURATION
@@ -604,7 +604,7 @@ async function createWidget() {
         }
 
         // DESTINATION NAME (with platform if available)
-        const platformSuffix = departures[i].platform ? `, Pl. ${departures[i].platform}` : '';
+        const platformSuffix = departures[i].platform ? ` Pl. ${departures[i].platform}` : '';
         const destinationName = infoStack.addText(departures[i].destination + platformSuffix);
         destinationName.font = widgetConfig.destinationFont;
         destinationName.textColor = Color.white();
@@ -816,7 +816,10 @@ async function main() {
     console.log(`[INFO]   - Gradient: '${userGradient}'`);
     console.log(`[INFO]   - Transport Types: using default configuration`);
 
-    if (!config.runsInWidget) {
+    // Check if launched from widget tap (not running inside widget, but has widget parameter or launched from home screen)
+    const launchedFromWidgetTap = !config.runsInWidget && (config.runsFromHomeScreen || args.widgetParameter);
+
+    if (!config.runsInWidget && !launchedFromWidgetTap) {
         const menuChoice = await showMainMenu();
 
         if (menuChoice === 0) {
@@ -844,6 +847,8 @@ async function main() {
             console.log('[INFO]   - User cancelled main menu.');
             return;
         }
+    } else if (launchedFromWidgetTap) {
+        console.log('[INFO]   - Launched from widget tap, skipping menu and showing widget directly.');
     }
 
     const widget = await createWidget();
