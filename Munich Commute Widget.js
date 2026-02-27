@@ -604,7 +604,8 @@ async function createWidget() {
         }
 
         // DESTINATION NAME (with platform if available)
-        const platformSuffix = departures[i].platform ? `  Pl. ${departures[i].platform}` : '';
+        // Show platform only if no single platform filter is applied (i.e., showing multiple platforms)
+        const platformSuffix = !userPlatforms && departures[i].platform ? `  Pl. ${departures[i].platform}` : '';
         const destinationName = infoStack.addText(departures[i].destination + platformSuffix);
         destinationName.font = widgetConfig.destinationFont;
         destinationName.textColor = Color.white();
