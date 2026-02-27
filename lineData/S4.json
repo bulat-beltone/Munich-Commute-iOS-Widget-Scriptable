@@ -1,0 +1,215 @@
+{
+  "line": "S4",
+  "routeId": "ddb-92-M04-1",
+  "routeName": "Geltendorf - München Ost",
+  "direction": "Geltendorf → Ebersberg",
+  "stopsCount": 34,
+  "dataSource": "MVV OpenData GTFS (cc-by), Münchner Verkehrs- und Tarifverbund GmbH (MVV)",
+  "extractedAt": "2026-02-17",
+  "stops": [
+    {
+      "id": "de:09181:502",
+      "name": "Geltendorf",
+      "lat": 48.1063562,
+      "lon": 11.0365309
+    },
+    {
+      "id": "de:09179:6230",
+      "name": "Türkenfeld",
+      "lat": 48.1050785,
+      "lon": 11.0780689
+    },
+    {
+      "id": "de:09179:6220",
+      "name": "Grafrath",
+      "lat": 48.1323651,
+      "lon": 11.1528986
+    },
+    {
+      "id": "de:09179:6210",
+      "name": "Schöngeising",
+      "lat": 48.1463926,
+      "lon": 11.1915621
+    },
+    {
+      "id": "de:09179:6200",
+      "name": "Buchenau",
+      "lat": 48.1614768,
+      "lon": 11.2255094
+    },
+    {
+      "id": "de:09179:6190",
+      "name": "Fürstenfeldbruck",
+      "lat": 48.1720577,
+      "lon": 11.2624212
+    },
+    {
+      "id": "de:09179:6180",
+      "name": "Eichenau",
+      "lat": 48.1793181,
+      "lon": 11.3282498
+    },
+    {
+      "id": "de:09179:6170",
+      "name": "Puchheim",
+      "lat": 48.1722374,
+      "lon": 11.352648
+    },
+    {
+      "id": "de:09162:1710",
+      "name": "Aubing",
+      "lat": 48.1538424,
+      "lon": 11.4138502
+    },
+    {
+      "id": "de:09162:1700",
+      "name": "Leienfelsstraße",
+      "lat": 48.1527996,
+      "lon": 11.4273429
+    },
+    {
+      "id": "de:09162:10",
+      "name": "Pasing",
+      "lat": 48.148832,
+      "lon": 11.4606435
+    },
+    {
+      "id": "de:09162:9",
+      "name": "Laim",
+      "lat": 48.1435994,
+      "lon": 11.5031787
+    },
+    {
+      "id": "de:09162:31",
+      "name": "Hirschgarten",
+      "lat": 48.1435514,
+      "lon": 11.5194741
+    },
+    {
+      "id": "de:09162:8",
+      "name": "Donnersbergerbrücke",
+      "lat": 48.1426763,
+      "lon": 11.5346197
+    },
+    {
+      "id": "de:09162:7",
+      "name": "Hackerbrücke",
+      "lat": 48.1435394,
+      "lon": 11.5487772
+    },
+    {
+      "id": "de:09162:6",
+      "name": "Hauptbahnhof (U, Tram)",
+      "lat": 48.139727,
+      "lon": 11.5610392
+    },
+    {
+      "id": "de:09162:1",
+      "name": "Karlsplatz (Stachus)",
+      "lat": 48.1393673,
+      "lon": 11.565396
+    },
+    {
+      "id": "de:09162:2",
+      "name": "Marienplatz",
+      "lat": 48.1364359,
+      "lon": 11.577658
+    },
+    {
+      "id": "de:09162:3",
+      "name": "Isartor",
+      "lat": 48.1338939,
+      "lon": 11.5828233
+    },
+    {
+      "id": "de:09162:4",
+      "name": "Rosenheimer Platz",
+      "lat": 48.1285878,
+      "lon": 11.5938996
+    },
+    {
+      "id": "de:09162:5",
+      "name": "Ostbahnhof",
+      "lat": 48.1281381,
+      "lon": 11.6040685
+    },
+    {
+      "id": "de:09162:900",
+      "name": "Leuchtenbergring",
+      "lat": 48.1342956,
+      "lon": 11.6159712
+    },
+    {
+      "id": "de:09162:910",
+      "name": "Berg am Laim",
+      "lat": 48.1360642,
+      "lon": 11.6336949
+    },
+    {
+      "id": "de:09162:920",
+      "name": "Trudering",
+      "lat": 48.1255238,
+      "lon": 11.6633483
+    },
+    {
+      "id": "de:09184:2130",
+      "name": "Gronsdorf",
+      "lat": 48.1183818,
+      "lon": 11.6995055
+    },
+    {
+      "id": "de:09184:2140",
+      "name": "Haar",
+      "lat": 48.1109868,
+      "lon": 11.7304884
+    },
+    {
+      "id": "de:09175:4000",
+      "name": "Vaterstetten",
+      "lat": 48.1045086,
+      "lon": 11.7656035
+    },
+    {
+      "id": "de:09175:4010",
+      "name": "Baldham",
+      "lat": 48.0992055,
+      "lon": 11.7869924
+    },
+    {
+      "id": "de:09175:4020",
+      "name": "Zorneding",
+      "lat": 48.0888916,
+      "lon": 11.8324382
+    },
+    {
+      "id": "de:09175:4030",
+      "name": "Eglharting",
+      "lat": 48.0813784,
+      "lon": 11.863466
+    },
+    {
+      "id": "de:09175:4040",
+      "name": "Kirchseeon",
+      "lat": 48.0713791,
+      "lon": 11.8877654
+    },
+    {
+      "id": "de:09175:4050",
+      "name": "Grafing-Bahnhof",
+      "lat": 48.0437418,
+      "lon": 11.9406493
+    },
+    {
+      "id": "de:09175:4060",
+      "name": "Grafing Stadt",
+      "lat": 48.0468587,
+      "lon": 11.9616159
+    },
+    {
+      "id": "de:09175:4070",
+      "name": "Ebersberg",
+      "lat": 48.0752206,
+      "lon": 11.9700601
+    }
+  ]
+}

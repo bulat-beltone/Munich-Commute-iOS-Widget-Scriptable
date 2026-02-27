@@ -1,0 +1,197 @@
+{
+  "line": "S3",
+  "routeId": "ddb-92-M03-1",
+  "routeName": "Mammendorf - Bahnhof Deisenhofen",
+  "direction": "Mammendorf → Holzkirchen",
+  "stopsCount": 31,
+  "dataSource": "MVV OpenData GTFS (cc-by), Münchner Verkehrs- und Tarifverbund GmbH (MVV)",
+  "extractedAt": "2026-02-17",
+  "stops": [
+    {
+      "id": "de:09179:6160",
+      "name": "Mammendorf",
+      "lat": 48.2166819,
+      "lon": 11.174539
+    },
+    {
+      "id": "de:09179:6150",
+      "name": "Malching",
+      "lat": 48.2160953,
+      "lon": 11.2194638
+    },
+    {
+      "id": "de:09179:6140",
+      "name": "Maisach",
+      "lat": 48.2147665,
+      "lon": 11.2573547
+    },
+    {
+      "id": "de:09179:6130",
+      "name": "Gernlinden",
+      "lat": 48.2136831,
+      "lon": 11.2996025
+    },
+    {
+      "id": "de:09179:6120",
+      "name": "Esting",
+      "lat": 48.2127073,
+      "lon": 11.3191229
+    },
+    {
+      "id": "de:09179:6110",
+      "name": "Olching",
+      "lat": 48.2098818,
+      "lon": 11.3342864
+    },
+    {
+      "id": "de:09179:6100",
+      "name": "Gröbenzell",
+      "lat": 48.1955065,
+      "lon": 11.3730038
+    },
+    {
+      "id": "de:09162:1810",
+      "name": "Lochhausen",
+      "lat": 48.1774312,
+      "lon": 11.4074812
+    },
+    {
+      "id": "de:09162:1800",
+      "name": "Langwied",
+      "lat": 48.1629688,
+      "lon": 11.4322477
+    },
+    {
+      "id": "de:09162:10",
+      "name": "Pasing",
+      "lat": 48.148832,
+      "lon": 11.4606435
+    },
+    {
+      "id": "de:09162:9",
+      "name": "Laim",
+      "lat": 48.1435994,
+      "lon": 11.5031787
+    },
+    {
+      "id": "de:09162:31",
+      "name": "Hirschgarten",
+      "lat": 48.1435514,
+      "lon": 11.5194741
+    },
+    {
+      "id": "de:09162:8",
+      "name": "Donnersbergerbrücke",
+      "lat": 48.1426763,
+      "lon": 11.5346197
+    },
+    {
+      "id": "de:09162:7",
+      "name": "Hackerbrücke",
+      "lat": 48.1435394,
+      "lon": 11.5487772
+    },
+    {
+      "id": "de:09162:6",
+      "name": "Hauptbahnhof (U, Tram)",
+      "lat": 48.139727,
+      "lon": 11.5610392
+    },
+    {
+      "id": "de:09162:1",
+      "name": "Karlsplatz (Stachus)",
+      "lat": 48.1393673,
+      "lon": 11.565396
+    },
+    {
+      "id": "de:09162:2",
+      "name": "Marienplatz",
+      "lat": 48.1364359,
+      "lon": 11.577658
+    },
+    {
+      "id": "de:09162:3",
+      "name": "Isartor",
+      "lat": 48.1338939,
+      "lon": 11.5828233
+    },
+    {
+      "id": "de:09162:4",
+      "name": "Rosenheimer Platz",
+      "lat": 48.1285878,
+      "lon": 11.5938996
+    },
+    {
+      "id": "de:09162:5",
+      "name": "Ostbahnhof",
+      "lat": 48.1281381,
+      "lon": 11.6040685
+    },
+    {
+      "id": "de:09162:1100",
+      "name": "St.-Martin-Straße",
+      "lat": 48.1187116,
+      "lon": 11.5965047
+    },
+    {
+      "id": "de:09162:1110",
+      "name": "Giesing",
+      "lat": 48.1108129,
+      "lon": 11.5946452
+    },
+    {
+      "id": "de:09162:1120",
+      "name": "Fasangarten",
+      "lat": 48.0933978,
+      "lon": 11.6040056
+    },
+    {
+      "id": "de:09184:2300",
+      "name": "Fasanenpark",
+      "lat": 48.0795899,
+      "lon": 11.6083355
+    },
+    {
+      "id": "de:09184:2310",
+      "name": "Unterhaching",
+      "lat": 48.0653941,
+      "lon": 11.6127103
+    },
+    {
+      "id": "de:09184:2320",
+      "name": "Taufkirchen",
+      "lat": 48.0511644,
+      "lon": 11.609108
+    },
+    {
+      "id": "de:09184:2330",
+      "name": "Furth",
+      "lat": 48.0349005,
+      "lon": 11.5925251
+    },
+    {
+      "id": "de:09184:2340",
+      "name": "Deisenhofen",
+      "lat": 48.0202056,
+      "lon": 11.5832545
+    },
+    {
+      "id": "de:09184:2350",
+      "name": "Sauerlach",
+      "lat": 47.9737627,
+      "lon": 11.6546706
+    },
+    {
+      "id": "de:09182:43342",
+      "name": "Otterfing",
+      "lat": 47.9110412,
+      "lon": 11.6816919
+    },
+    {
+      "id": "de:09182:43227",
+      "name": "Holzkirchen",
+      "lat": 47.8840709,
+      "lon": 11.6966938
+    }
+  ]
+}

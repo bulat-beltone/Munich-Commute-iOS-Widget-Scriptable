@@ -30,11 +30,18 @@ Color options:
 
 When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with two options:
 
-#### Find Station
-Search for any station and preview the widget with live departures. Great for quick lookups.
+#### 🔍 Find Station
+Quick preview wizard with prefilled defaults from your configuration:
 
-#### Create Saved Station
-A step-by-step wizard to create a reusable station profile:
+1. **Station** — Search and select (defaults from `DEFAULT_WIDGET_PARAMETERS`)
+2. **Platform** (optional) — Filter by platform number (prefilled from defaults)
+3. **Lines** (optional) — Filter by specific lines (prefilled from defaults)
+4. Shows live preview with your default color gradient
+
+Perfect for quick lookups or testing different stations.
+
+#### ➕ Create Saved Station
+A step-by-step wizard to create a reusable saved stations:
 
 1. **Saved Station name** — A short name like "Home" or "Work"
 2. **Station** — Search and select from MVG stations
@@ -43,9 +50,9 @@ A step-by-step wizard to create a reusable station profile:
 5. **Color** — Choose a background gradient
 
 After saving:
-- The profile name is **copied to your clipboard**
+- The saved station name is **copied to your clipboard**
 - You'll see instructions on how to add the widget to your home screen
-- The profile is saved to `Munich Commute. Saved Stations/<ProfileName>.txt`
+- The saved station is saved to `Munich Commute. Saved Stations/<StationName>.txt`
 
 ### Adding the Widget to Home Screen
 
@@ -54,7 +61,7 @@ After saving:
 3. Search "Scriptable" → Add widget (any size)
 4. Long-press the widget → "Edit Widget"
 5. Select "Munich Commute Widget" as the Script
-6. Paste your profile name (e.g., "Home") as the Parameter
+6. Paste your saved station name (e.g., "Home") as the Parameter
 
 ### Configuration Parameters
 
@@ -92,15 +99,15 @@ Choose from available gradients:
 - `purple`
 - `teal`
 
-#### Saved Station Profiles
-You can provide a **profile name** as the widget parameter (without `:`). The script will then load the saved profile.
+#### Saved Stations
+You can provide a **saved station name** as the widget parameter (without `:`). The script will then load the saved station.
 
 Example widget parameter:
 ```
 Home
 ```
 
-Profile file locations (searched in order):
+Saved station file locations (searched in order):
 - `Munich Commute. Saved Stations/Home.txt`
 - `Home.txt` (fallback)
 
