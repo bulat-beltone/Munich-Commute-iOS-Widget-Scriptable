@@ -26,6 +26,16 @@ Color options:
 
 ## Usage
 
+### Profile Wizard Script
+You can use `Munich-Commute-Profile-Wizard.js` to create profile files interactively.
+
+What it does:
+- asks for profile name, station, optional platform, optional lines
+- lets you pick one of the available colors (`grey`, `red`, `blue`, `green`, `purple`, `teal`)
+- saves `<ProfileName>.txt` to `MunichCommuteWidgetParams/` in Scriptable Documents
+
+Then set the widget parameter to just the profile name (for example: `Home`).
+
 ### Basic Setup
 1. Add a Scriptable widget to your home screen
 2. Long press the widget and select "Edit Widget"
@@ -67,6 +77,25 @@ Choose from available gradients:
 - `green`
 - `purple`
 - `teal`
+
+#### Parameter Profiles (TXT files)
+You can also provide a **profile name** as the widget parameter (without `:`). The script will then load `<ProfileName>.txt`.
+
+Example widget parameter:
+```
+Home
+```
+
+Example file locations in Scriptable documents:
+- `MunichCommuteWidgetParams/Home.txt` (preferred)
+- `Home.txt` (fallback)
+
+Example file content:
+```
+station:München-Langwied;platform:1;background:purple
+```
+
+`background` is still supported and treated as `gradient` for backward compatibility.
 
 ### Example Configurations
 

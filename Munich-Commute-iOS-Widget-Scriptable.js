@@ -59,8 +59,44 @@ const CONFIG = {
 };
 
 
+function resolveWidgetParameter(rawParameter) {
+    const trimmedParameter = (rawParameter || "").trim();
+    if (!trimmedParameter) return DEFAULT_WIDGET_PARAMETERS;
+
+    // Backward-compatible: treat full key:value strings as inline parameters.
+    if (trimmedParameter.includes(":")) {
+        return trimmedParameter;
+    }
+
+    // New: if only a profile name is provided, load it from iCloud .txt file.
+    // Example widget parameter: "Home" -> reads "Home.txt".
+    const fileManager = FileManager.iCloud();
+    const documentsDirectory = fileManager.documentsDirectory();
+    const profileDirectory = fileManager.joinPath(documentsDirectory, "MunichCommuteWidgetParams");
+    const profileFileName = `${trimmedParameter}.txt`;
+    const profileFileCandidates = [
+        fileManager.joinPath(profileDirectory, profileFileName),
+        fileManager.joinPath(documentsDirectory, profileFileName)
+    ];
+
+    for (const profileFilePath of profileFileCandidates) {
+        if (!fileManager.fileExists(profileFilePath)) continue;
+
+        const loadedProfileContent = fileManager.readString(profileFilePath).trim();
+        if (loadedProfileContent) {
+            console.log(`[INFO] Loaded widget parameters from '${profileFilePath}'.`);
+            return loadedProfileContent;
+        }
+        console.log(`[WARN] Parameter profile file '${profileFilePath}' is empty. Falling back to defaults.`);
+        return DEFAULT_WIDGET_PARAMETERS;
+    }
+
+    console.log(`[WARN] No widget parameter profile found for '${trimmedParameter}'. Falling back to defaults.`);
+    return DEFAULT_WIDGET_PARAMETERS;
+}
+
 // Parse widget parameters
-const paramString = (args.widgetParameter || DEFAULT_WIDGET_PARAMETERS).trim();
+const paramString = resolveWidgetParameter(args.widgetParameter);
 const parameters = paramString ? paramString.split(";") : [];
 let userStation = "Marienplatz";
 let userPlatforms = null;
@@ -386,6 +422,58 @@ async function getStationId(stationName) {
     return selectedStation ? { globalId: selectedStation.globalId, name: selectedStation.name } : null;
 }
 
+async function promptForStationSelection() {
+    const stationPrompt = new Alert();
+    stationPrompt.title = "Choose station";
+    stationPrompt.message = "Type a station name";
+    stationPrompt.addTextField("Station", userStation);
+    stationPrompt.addAction("Search");
+    stationPrompt.addCancelAction("Cancel");
+
+    const selectedAction = await stationPrompt.presentAlert();
+    if (selectedAction === -1) {
+        return null;
+    }
+
+    const typedStation = stationPrompt.textFieldValue(0).trim();
+    if (!typedStation) {
+        return null;
+    }
+
+    const formattedStation = formatStationName(typedStation);
+    const url = `https://www.mvg.de/api/bgw-pt/v3/locations?query=${formattedStation}`;
+    const response = await new Request(url).loadJSON();
+    const stations = response.filter(entry => entry.type === "STATION");
+
+    if (stations.length === 0) {
+        const noMatchAlert = new Alert();
+        noMatchAlert.title = "No station found";
+        noMatchAlert.message = `No station found for \"${typedStation}\"`;
+        noMatchAlert.addAction("OK");
+        await noMatchAlert.presentAlert();
+        return null;
+    }
+
+    if (stations.length === 1) {
+        return stations[0].name;
+    }
+
+    const selectionAlert = new Alert();
+    selectionAlert.title = "Select station";
+    selectionAlert.message = `Found ${stations.length} matches for \"${typedStation}\"`;
+
+    const shownStations = stations.slice(0, 10);
+    shownStations.forEach(station => selectionAlert.addAction(station.name));
+    selectionAlert.addCancelAction("Cancel");
+
+    const selectedIndex = await selectionAlert.presentSheet();
+    if (selectedIndex === -1) {
+        return null;
+    }
+
+    return shownStations[selectedIndex].name;
+}
+
 async function getDepartures(globalId) {
     // Create a mapping from internal keys to API expected values
     const transportTypeMapping = {
@@ -662,10 +750,21 @@ console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
 console.log(`[INFO]   - Lines: '${userLines}'`);
 console.log(`[INFO]   - Gradient: '${userGradient}'`);
 console.log(`[INFO]   - Transport Types: using default configuration`);
+
+if (!config.runsInWidget) {
+    const selectedStation = await promptForStationSelection();
+    if (selectedStation) {
+        userStation = selectedStation;
+        console.log(`[INFO]   - Station selected from prompt: '${userStation}'`);
+    } else {
+        console.log('[INFO]   - Using station from parameters/defaults.');
+    }
+}
+
 const widget = await createWidget();
 console.log('[INFO] Step 7: Widget construction complete.');
 
-if (!config.runInWidget) {
+if (!config.runsInWidget) {
     const widgetSize = config.widgetFamily || 'large';
     switch(widgetSize) {
         case 'small':
