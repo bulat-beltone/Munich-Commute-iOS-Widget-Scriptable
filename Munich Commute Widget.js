@@ -15,6 +15,7 @@ const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3,
 
 // Subtract this many minutes from displayed departure times
 const SUBTRACT_MINUTES = 1;
+const SHOW_SUBTRACT_MINUTES = true; // Show "-X" indicator in widget header
 
 // Transport types to display (set to false to hide a type)
 const TRANSPORT_TYPES = {
@@ -494,7 +495,7 @@ async function createWidget() {
     console.log('[INFO]   - Added station name and icon');
 
     // Subtract minutes indicator
-    if (SUBTRACT_MINUTES > 0) {
+    if (SHOW_SUBTRACT_MINUTES && SUBTRACT_MINUTES > 0) {
         headerStack.addSpacer();
         const subMins = headerStack.addText(`-${SUBTRACT_MINUTES}`);
         subMins.textColor = Color.white();
