@@ -602,12 +602,14 @@ async function createWidget() {
             mainTime.lineLimit = 1;
         }
 
-        // DESTINATION NAME
-        const destinationName = infoStack.addText(departures[i].destination);
+        // DESTINATION NAME (with platform if available)
+        const platformSuffix = departures[i].platform ? `, Pl. ${departures[i].platform}` : '';
+        const destinationName = infoStack.addText(departures[i].destination + platformSuffix);
         destinationName.font = widgetConfig.destinationFont;
         destinationName.textColor = Color.white();
         destinationName.textOpacity = widgetConfig.textWithOpacity;
         destinationName.lineLimit = 1;
+        destinationName.minimumScaleFactor = 0.5;
 
         rowStack.addSpacer();
 
