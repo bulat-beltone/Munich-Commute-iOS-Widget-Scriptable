@@ -245,6 +245,17 @@ function getWidgetDimensions(family) {
     }
 }
 
+function getPrimaryDepartureFont() {
+    const screenResolution = Device.screenResolution();
+    const referenceWidth = Math.max(screenResolution.width, screenResolution.height);
+    const calculatedFontSize = Math.floor(referenceWidth / 127);
+    const minFontSize = 16;
+    const maxFontSize = 30;
+    const clampedFontSize = Math.max(minFontSize, Math.min(maxFontSize, calculatedFontSize));
+    console.log(`[DEBUG] Dynamic primary font: referenceWidth=${referenceWidth}, calculated=${calculatedFontSize}, clamped=${clampedFontSize}`);
+    return Font.boldSystemFont(clampedFontSize);
+}
+
 // Widget size configurations
 const WIDGET_CONFIG = {
     small: {
@@ -504,6 +515,7 @@ async function createWidget() {
     const widgetSize = config.widgetFamily || 'large';
     console.log(`[INFO]   - Widget family: ${widgetSize}`);
     const widgetConfig = WIDGET_CONFIG[widgetSize];
+    const primaryDepartureFont = getPrimaryDepartureFont();
     const { width: widgetWidth, height: widgetHeight } = getWidgetDimensions(widgetSize);
     const deviceHeight = Device.screenResolution().height.toString();
     const deviceModel = Device.model();
@@ -685,11 +697,13 @@ async function createWidget() {
             const plannedTimeText = timeRowStack.addText(plannedTimeStr);
             plannedTimeText.textColor = Color.white();
             if (i === 0) {
-                plannedTimeText.font = widgetConfig.departurePrimaryFont;
+                plannedTimeText.font = primaryDepartureFont;
             } else {
                 plannedTimeText.font = widgetConfig.departureSecondaryFont;
             }
             plannedTimeText.centerAlignText();
+            plannedTimeText.lineLimit = 1;
+            plannedTimeText.minimumScaleFactor = 0.65;
 
             // Add 4px spacing
             timeRowStack.addSpacer(4);
@@ -700,11 +714,13 @@ async function createWidget() {
             const colonMinutesText = timeRowStack.addText(':' + delayedMinutes);
             colonMinutesText.textColor = new Color('#DB5C5C');
             if (i === 0) {
-                colonMinutesText.font = widgetConfig.departurePrimaryFont;
+                colonMinutesText.font = primaryDepartureFont;
             } else {
                 colonMinutesText.font = widgetConfig.departureSecondaryFont;
             }
             colonMinutesText.centerAlignText();
+            colonMinutesText.lineLimit = 1;
+            colonMinutesText.minimumScaleFactor = 0.65;
         } else {
             // Not delayed, show only main time in white
             const timeRowStack = infoStack.addStack();
@@ -713,10 +729,12 @@ async function createWidget() {
             const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
             mainTime.textColor = Color.white();
             if (i === 0) {
-                mainTime.font = widgetConfig.departurePrimaryFont;
+                mainTime.font = primaryDepartureFont;
             } else {
                 mainTime.font = widgetConfig.departureSecondaryFont;
             }
+            mainTime.lineLimit = 1;
+            mainTime.minimumScaleFactor = 0.65;
         }
 
 
