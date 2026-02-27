@@ -638,6 +638,130 @@ async function createWidget() {
 // WIZARD FLOWS
 // ============================================================================
 
+async function findNearestStation() {
+    // Request location permission and get current location
+    Location.setAccuracyToThreeKilometers();
+    let location;
+    try {
+        location = await Location.current();
+    } catch (e) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Location Error";
+        errorAlert.message = "Could not get your location. Please enable location access in Settings.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    const userLat = location.latitude;
+    const userLon = location.longitude;
+    console.log(`[INFO] Current location: ${userLat}, ${userLon}`);
+
+    // Use the proper nearby stations API endpoint
+    const url = `https://www.mvg.de/api/bgw-pt/v3/stations/nearby?latitude=${userLat}&longitude=${userLon}`;
+
+    let stations;
+    try {
+        stations = await new Request(url).loadJSON();
+    } catch (e) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Network error";
+        errorAlert.message = "Could not search for nearby stations. Check your internet connection.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    if (!Array.isArray(stations) || stations.length === 0) {
+        const noMatchAlert = new Alert();
+        noMatchAlert.title = "No stations found";
+        noMatchAlert.message = "No stations found nearby.";
+        noMatchAlert.addAction("OK");
+        await noMatchAlert.presentAlert();
+        return null;
+    }
+
+    console.log(`[INFO] Found ${stations.length} nearby stations`);
+
+    // API returns stations already sorted by distance with distanceInMeters
+    const nearestStations = stations.slice(0, 10);
+
+    // Show selection alert
+    const selectionAlert = new Alert();
+    selectionAlert.title = "Select Nearest Station";
+    selectionAlert.message = `Found ${nearestStations.length} stations nearby:`;
+
+    nearestStations.forEach(station => {
+        const distance = station.distanceInMeters >= 1000
+            ? `${(station.distanceInMeters / 1000).toFixed(1)} km`
+            : `${station.distanceInMeters} m`;
+        selectionAlert.addAction(`${station.name} (${distance})`);
+    });
+    selectionAlert.addCancelAction("Cancel");
+
+    const selectedIndex = await selectionAlert.presentSheet();
+    if (selectedIndex === -1) return null;
+
+    const nearestStation = nearestStations[selectedIndex].name;
+    const selectedDistance = nearestStations[selectedIndex].distanceInMeters;
+    console.log(`[INFO] Selected station: ${nearestStation} (${selectedDistance}m away)`);
+
+    // Parse default parameters for prefill
+    const defaultParams = DEFAULT_WIDGET_PARAMETERS.split(";");
+    let defaultPlatform = "";
+    let defaultLines = "";
+    let defaultGradient = "grey";
+
+    defaultParams.forEach(param => {
+        const trimmedParam = param.trim();
+        if (!trimmedParam.includes(":")) return;
+
+        const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
+        const value = valueParts.join(":").trim();
+
+        switch (key.toLowerCase()) {
+            case "platform":
+                defaultPlatform = value;
+                break;
+            case "lines":
+                defaultLines = value;
+                break;
+            case "gradient":
+            case "background":
+                defaultGradient = value;
+                break;
+        }
+    });
+
+    // Platform selection (optional)
+    const platform = await askText({
+        title: "Platform (optional)",
+        message: `Nearest station: ${nearestStation}\n\nFilter by platform number.\nLeave empty to show all platforms.`,
+        placeholder: defaultPlatform || "1",
+        defaultValue: defaultPlatform,
+        isOptional: true
+    });
+    if (platform === null) return null;
+
+    // Lines selection (optional)
+    const lines = await askText({
+        title: "Lines (optional)",
+        message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
+        placeholder: defaultLines || "S1, S2, U3",
+        defaultValue: defaultLines,
+        isOptional: true
+    });
+    if (lines === null) return null;
+
+    // Return a config object to apply to the widget (no gradient for Find Nearest Station)
+    return {
+        station: nearestStation,
+        platform: platform,
+        lines: lines,
+        gradient: defaultGradient // Use default gradient from config
+    };
+}
+
 async function promptForStationSelection() {
     // Parse default parameters to prefill the wizard
     const defaultParams = DEFAULT_WIDGET_PARAMETERS.split(";");
@@ -939,9 +1063,9 @@ async function showMainMenu() {
     const menu = new Alert();
     menu.title = "Munich Commute Widget";
     menu.message = "What would you like to do?";
-    menu.addAction("Find Station");
-    menu.addAction("Create Saved Station");
-    menu.addAction("Edit Saved Station");
+    menu.addAction("🔎 Find Nearest Station");
+    menu.addAction("➕ Create Saved Station");
+    menu.addAction("✏️ Edit Saved Station");
     menu.addCancelAction("Cancel");
 
     const selectedAction = await menu.presentSheet();
@@ -968,16 +1092,16 @@ async function main() {
         const menuChoice = await showMainMenu();
 
         if (menuChoice === 0) {
-            // Find Station - wizard with prefilled defaults
-            const config = await promptForStationSelection();
+            // Find Nearest Station - wizard with geolocation
+            const config = await findNearestStation();
             if (config) {
                 userStation = config.station;
                 userPlatforms = config.platform ? Number(config.platform) : null;
                 userLines = config.lines ? config.lines.split(",").map(line => line.trim()) : null;
                 userGradient = config.gradient;
-                console.log(`[INFO]   - Station configured from wizard: '${userStation}'`);
+                console.log(`[INFO]   - Station configured from nearest station: '${userStation}'`);
             } else {
-                console.log('[INFO]   - User cancelled station selection.');
+                console.log('[INFO]   - User cancelled nearest station selection.');
                 return;
             }
         } else if (menuChoice === 1) {
