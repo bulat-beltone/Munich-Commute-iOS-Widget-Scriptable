@@ -12,6 +12,10 @@
 // Default parameters
 const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3, S4";
 
+// Profile directory for saved stations
+const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
+const AVAILABLE_GRADIENTS = ["grey", "red", "blue", "green", "purple", "teal"];
+
 // Configuration
 const CONFIG = {
     subtractMinutes: 1, // Subtract this many minutes from current time display
@@ -177,7 +181,8 @@ const WIDGET_CONFIG = {
         lineBadgeSize: new Size(24, 15),
         lineBadgeFont: Font.boldSystemFont(11),
         destinationFont: Font.caption1(),
-        textWithOpacity: 0.5
+        textWithOpacity: 0.5,
+        departureSecondaryFont: Font.boldSystemFont(15)
     },
     medium: {
         itemsCount: 2,
@@ -186,7 +191,8 @@ const WIDGET_CONFIG = {
         lineBadgeSize: new Size(24, 15),
         lineBadgeFont: Font.boldSystemFont(11),
         destinationFont: Font.caption1(),
-        textWithOpacity: 0.5
+        textWithOpacity: 0.5,
+        departureSecondaryFont: Font.boldSystemFont(15)
     },
     large: {
         itemsCount: 6,
@@ -195,7 +201,8 @@ const WIDGET_CONFIG = {
         lineBadgeSize: new Size(24, 15),
         lineBadgeFont: Font.boldSystemFont(11),
         destinationFont: Font.caption1(),
-        textWithOpacity: 0.5
+        textWithOpacity: 0.5,
+        departureSecondaryFont: Font.boldSystemFont(15)
     }
 };
 
@@ -241,6 +248,99 @@ function formatStationName(station) {
         .replace("ü", "ue")
         .replace("ä", "ae")
         .replace("ö", "oe");
+}
+
+function sanitizeProfileName(inputName) {
+    return (inputName || "")
+        .trim()
+        .replace(/\.txt$/i, "")
+        .replace(/[\\/:*?"<>|]/g, "_");
+}
+
+async function askText({ title, message = "", defaultValue = "", placeholder = "", isOptional = false }) {
+    const alert = new Alert();
+    alert.title = title;
+    alert.message = message;
+    alert.addTextField(placeholder, defaultValue);
+    alert.addAction("Continue");
+    alert.addCancelAction("Cancel");
+
+    const selectedAction = await alert.presentAlert();
+    if (selectedAction === -1) {
+        return null;
+    }
+
+    const value = alert.textFieldValue(0).trim();
+    if (!value && !isOptional) {
+        return askText({ title, message: "This value is required.", defaultValue, placeholder, isOptional });
+    }
+
+    return value;
+}
+
+async function askGradient(defaultGradient = "grey") {
+    const alert = new Alert();
+    alert.title = "Choose a color";
+    alert.message = "Select the widget background color.";
+
+    AVAILABLE_GRADIENTS.forEach(gradient => {
+        if (gradient === defaultGradient) {
+            alert.addAction(`${gradient} (default)`);
+        } else {
+            alert.addAction(gradient);
+        }
+    });
+    alert.addCancelAction("Cancel");
+
+    const selectedIndex = await alert.presentSheet();
+    if (selectedIndex === -1) {
+        return null;
+    }
+
+    return AVAILABLE_GRADIENTS[selectedIndex];
+}
+
+async function searchAndSelectStation(typedStation) {
+    const formattedStation = formatStationName(typedStation);
+    const url = `https://www.mvg.de/api/bgw-pt/v3/locations?query=${formattedStation}`;
+
+    let response;
+    try {
+        response = await new Request(url).loadJSON();
+    } catch (e) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Network error";
+        errorAlert.message = "Could not search for stations. Check your internet connection.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    const stations = response.filter(entry => entry.type === "STATION");
+
+    if (stations.length === 0) {
+        const noMatchAlert = new Alert();
+        noMatchAlert.title = "No station found";
+        noMatchAlert.message = `No station found for "${typedStation}"`;
+        noMatchAlert.addAction("OK");
+        await noMatchAlert.presentAlert();
+        return null;
+    }
+
+    const selectionAlert = new Alert();
+    selectionAlert.title = "Select station";
+    selectionAlert.message = `Found ${stations.length} match${stations.length > 1 ? 'es' : ''} for "${typedStation}"`;
+
+    const shownStations = stations.slice(0, 10);
+    shownStations.forEach(station => selectionAlert.addAction(station.name));
+    selectionAlert.addCancelAction("Cancel");
+
+    const selectedIndex = await selectionAlert.presentSheet();
+    if (selectedIndex === -1) {
+        return null;
+    }
+
+    return shownStations[selectedIndex].name;
 }
 
 function formatDepartureTime(timestamp) {
@@ -359,7 +459,7 @@ async function createWidget() {
     const widgetSize = config.widgetFamily || 'large';
     console.log(`[INFO]   - Widget family: ${widgetSize}`);
     const widgetConfig = WIDGET_CONFIG[widgetSize];
-    const { primary: primaryDepartureFont, secondary: secondaryDepartureFont } = getDepartureFonts();
+    const primaryDepartureFont = getDepartureFonts();
     console.log(`[INFO]   - Device: ${Device.model()}`);
 
     console.log('[INFO] Step 3: Fetching station ID...');
@@ -537,7 +637,7 @@ async function createWidget() {
             const plannedTimeStr = formatDepartureTime(plannedDate);
             const plannedTimeText = timeRowStack.addText(plannedTimeStr);
             plannedTimeText.textColor = Color.white();
-            plannedTimeText.font = i === 0 ? primaryDepartureFont : secondaryDepartureFont;
+            plannedTimeText.font = i === 0 ? primaryDepartureFont : widgetConfig.departureSecondaryFont;
             plannedTimeText.lineLimit = 1;
 
             timeRowStack.addSpacer(4);
@@ -547,7 +647,7 @@ async function createWidget() {
             const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
             const colonMinutesText = timeRowStack.addText(':' + delayedMinutes);
             colonMinutesText.textColor = new Color('#DB5C5C');
-            colonMinutesText.font = i === 0 ? primaryDepartureFont : secondaryDepartureFont;
+            colonMinutesText.font = i === 0 ? primaryDepartureFont : widgetConfig.departureSecondaryFont;
             colonMinutesText.lineLimit = 1;
         } else {
             // Not delayed, show only main time in white
@@ -556,7 +656,7 @@ async function createWidget() {
             timeRowStack.centerAlignContent();
             const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
             mainTime.textColor = Color.white();
-            mainTime.font = i === 0 ? primaryDepartureFont : secondaryDepartureFont;
+            mainTime.font = i === 0 ? primaryDepartureFont : widgetConfig.departureSecondaryFont;
             mainTime.lineLimit = 1;
         }
 
@@ -583,45 +683,166 @@ async function createWidget() {
     return widget;
 }
 
+// Saved Station Wizard
+async function createSavedStation() {
+    const profileNameInput = await askText({
+        title: "Profile name",
+        message: "Give this station a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
+        placeholder: "Home"
+    });
+
+    if (profileNameInput === null) return null;
+
+    const profileName = sanitizeProfileName(profileNameInput);
+    if (!profileName) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Invalid profile name";
+        errorAlert.message = "Please use at least one valid character.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    const stationInput = await askText({
+        title: "Station",
+        message: "Type the station name to search.",
+        placeholder: "Marienplatz"
+    });
+    if (stationInput === null) return null;
+
+    const station = await searchAndSelectStation(stationInput);
+    if (station === null) return null;
+
+    const platform = await askText({
+        title: "Platform (optional)",
+        message: "Filter by platform number.\nLeave empty to show all platforms.",
+        placeholder: "1",
+        isOptional: true
+    });
+    if (platform === null) return null;
+
+    const lines = await askText({
+        title: "Lines (optional)",
+        message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
+        placeholder: "S1, S2, U3",
+        isOptional: true
+    });
+    if (lines === null) return null;
+
+    const gradient = await askGradient();
+    if (gradient === null) return null;
+
+    // Build the parameter string
+    const parameterParts = [`station:${station}`];
+    if (platform) parameterParts.push(`platform:${platform}`);
+    if (lines) parameterParts.push(`lines:${lines}`);
+    parameterParts.push(`gradient:${gradient}`);
+
+    const content = parameterParts.join(";");
+
+    // Save to file
+    const fileManager = FileManager.iCloud();
+    const documentsDirectory = fileManager.documentsDirectory();
+    const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
+
+    if (!fileManager.fileExists(profileDirectory)) {
+        fileManager.createDirectory(profileDirectory, true);
+    }
+
+    const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
+    fileManager.writeString(profilePath, content);
+
+    // Copy profile name to clipboard
+    Pasteboard.copy(profileName);
+
+    // Show success with instructions
+    const successAlert = new Alert();
+    successAlert.title = "Station Saved!";
+    successAlert.message = `"${profileName}" copied to clipboard.\n\nHow to add the widget:\n\n1. Go to your Home Screen\n2. Long-press → tap "+"\n3. Search "Scriptable" → Add widget\n4. Long-press the widget → "Edit Widget"\n5. Select "Munich Commute Widget"\n6. Paste "${profileName}" as Parameter`;
+    successAlert.addAction("Done");
+    successAlert.addAction("Show Saved File");
+
+    const successAction = await successAlert.presentAlert();
+    if (successAction === 1) {
+        QuickLook.present(profilePath);
+    }
+
+    return profileName;
+}
+
+// Main Menu (when running in-app)
+async function showMainMenu() {
+    const menu = new Alert();
+    menu.title = "Munich Commute Widget";
+    menu.message = "What would you like to do?";
+    menu.addAction("Find Station");
+    menu.addAction("Create Saved Station");
+    menu.addCancelAction("Cancel");
+
+    const selectedAction = await menu.presentSheet();
+    return selectedAction;
+}
+
 // Main execution
-console.log('[INFO] Munich Commute Widget script started');
-console.log('[INFO] Step 1: Parsing parameters...');
-console.log(`[INFO]   - Station: '${userStation}'`);
-console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
-console.log(`[INFO]   - Lines: '${userLines}'`);
-console.log(`[INFO]   - Gradient: '${userGradient}'`);
-console.log(`[INFO]   - Transport Types: using default configuration`);
+async function main() {
+    console.log('[INFO] Munich Commute Widget script started');
+    console.log('[INFO] Step 1: Parsing parameters...');
+    console.log(`[INFO]   - Station: '${userStation}'`);
+    console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
+    console.log(`[INFO]   - Lines: '${userLines}'`);
+    console.log(`[INFO]   - Gradient: '${userGradient}'`);
+    console.log(`[INFO]   - Transport Types: using default configuration`);
 
-if (!config.runsInWidget) {
-    const selectedStation = await promptForStationSelection();
-    if (selectedStation) {
-        userStation = selectedStation;
-        console.log(`[INFO]   - Station selected from prompt: '${userStation}'`);
-    } else {
-        console.log('[INFO]   - Using station from parameters/defaults.');
+    if (!config.runsInWidget) {
+        const menuChoice = await showMainMenu();
+
+        if (menuChoice === 0) {
+            // Find Station - original ad-hoc search behavior
+            const selectedStation = await promptForStationSelection();
+            if (selectedStation) {
+                userStation = selectedStation;
+                console.log(`[INFO]   - Station selected from prompt: '${userStation}'`);
+            } else {
+                console.log('[INFO]   - User cancelled station selection.');
+                return;
+            }
+        } else if (menuChoice === 1) {
+            // Create Saved Station - wizard flow
+            const savedProfile = await createSavedStation();
+            if (savedProfile) {
+                console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
+            }
+            return; // Exit after wizard - don't show widget preview
+        } else {
+            // Cancelled
+            console.log('[INFO]   - User cancelled main menu.');
+            return;
+        }
     }
+
+    const widget = await createWidget();
+    console.log('[INFO] Step 7: Widget construction complete.');
+
+    if (!config.runsInWidget) {
+        const widgetSize = config.widgetFamily || 'large';
+        switch(widgetSize) {
+            case 'small':
+                console.log('[INFO] Step 8: Presenting small widget preview.');
+                await widget.presentSmall();
+                break;
+            case 'large':
+                console.log('[INFO] Step 8: Presenting large widget preview.');
+                await widget.presentLarge();
+                break;
+            default:
+                console.log('[INFO] Step 8: Presenting medium widget preview.');
+                await widget.presentMedium();
+        }
+    }
+
+    Script.setWidget(widget);
+    console.log('[INFO] Step 9: Script finished.');
 }
 
-const widget = await createWidget();
-console.log('[INFO] Step 7: Widget construction complete.');
-
-if (!config.runsInWidget) {
-    const widgetSize = config.widgetFamily || 'large';
-    switch(widgetSize) {
-        case 'small':
-            console.log('[INFO] Step 8: Presenting small widget preview.');
-            await widget.presentSmall();
-            break;
-        case 'large':
-            console.log('[INFO] Step 8: Presenting large widget preview.');
-            await widget.presentLarge();
-            break;
-        default:
-            console.log('[INFO] Step 8: Presenting medium widget preview.');
-            await widget.presentMedium();
-    }
-}
-
-Script.setWidget(widget);
+await main();
 Script.complete();
-console.log('[INFO] Step 9: Script finished.');

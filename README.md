@@ -26,21 +26,35 @@ Color options:
 
 ## Usage
 
-### Profile Wizard Script
-You can use `Munich Commute Widget. Save Station.js` to create profile files interactively.
+### In-App Menu
 
-What it does:
-- asks for profile name, station, optional platform, optional lines
-- lets you pick one of the available colors (`grey`, `red`, `blue`, `green`, `purple`, `teal`)
-- saves `<ProfileName>.txt` to `MunichCommuteWidgetParams/` in Scriptable Documents
+When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with two options:
 
-Then set the widget parameter to just the profile name (for example: `Home`).
+#### Find Station
+Search for any station and preview the widget with live departures. Great for quick lookups.
 
-### Basic Setup
-1. Add a Scriptable widget to your home screen
-2. Long press the widget and select "Edit Widget"
-3. Choose your script from the list
-4. Optionally add parameters (see Configuration section)
+#### Create Saved Station
+A step-by-step wizard to create a reusable station profile:
+
+1. **Saved Station name** — A short name like "Home" or "Work"
+2. **Station** — Search and select from MVG stations
+3. **Platform** (optional) — Filter by platform number
+4. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
+5. **Color** — Choose a background gradient
+
+After saving:
+- The profile name is **copied to your clipboard**
+- You'll see instructions on how to add the widget to your home screen
+- The profile is saved to `Munich Commute. Saved Stations/<ProfileName>.txt`
+
+### Adding the Widget to Home Screen
+
+1. Go to your Home Screen
+2. Long-press anywhere → tap "+"
+3. Search "Scriptable" → Add widget (any size)
+4. Long-press the widget → "Edit Widget"
+5. Select "Munich Commute Widget" as the Script
+6. Paste your profile name (e.g., "Home") as the Parameter
 
 ### Configuration Parameters
 
@@ -78,24 +92,24 @@ Choose from available gradients:
 - `purple`
 - `teal`
 
-#### Parameter Profiles (TXT files)
-You can also provide a **profile name** as the widget parameter (without `:`). The script will then load `<ProfileName>.txt`.
+#### Saved Station Profiles
+You can provide a **profile name** as the widget parameter (without `:`). The script will then load the saved profile.
 
 Example widget parameter:
 ```
 Home
 ```
 
-Example file locations in Scriptable documents:
-- `MunichCommuteWidgetParams/Home.txt` (preferred)
+Profile file locations (searched in order):
+- `Munich Commute. Saved Stations/Home.txt`
 - `Home.txt` (fallback)
 
 Example file content:
 ```
-station:München-Langwied;platform:1;background:purple
+station:München-Langwied;platform:1;gradient:purple
 ```
 
-`background` is still supported and treated as `gradient` for backward compatibility.
+Note: `background` is still supported for backward compatibility.
 
 ### Example Configurations
 
