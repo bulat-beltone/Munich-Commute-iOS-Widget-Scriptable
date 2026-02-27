@@ -49,7 +49,14 @@ const CONFIG = {
 
 // Profile directory for saved stations
 const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
-const AVAILABLE_GRADIENTS = ["grey", "red", "blue", "green", "purple", "teal"];
+const AVAILABLE_GRADIENTS = [
+    { name: "black", label: "Black", emoji: "⚫" },
+    { name: "red", label: "Red", emoji: "🔴" },
+    { name: "blue", label: "Blue", emoji: "🔵" },
+    { name: "green", label: "Green", emoji: "🟢" },
+    { name: "purple", label: "Purple", emoji: "🟣" },
+    { name: "teal", label: "Teal", emoji: "🩵" }
+];
 
 // Fixed secondary departure font (for departures 2-6)
 const DEPARTURE_SECONDARY_FONT = Font.boldSystemFont(16);
@@ -181,7 +188,7 @@ const parameters = paramString ? paramString.split(";") : [];
 let userStation = "Marienplatz";
 let userPlatforms = null;
 let userLines = null;
-let userGradient = "grey";
+let userGradient = "black";
 let hasExplicitStation = false;
 
 // Parse parameters in any order
@@ -277,16 +284,17 @@ async function askText({ title, message = "", defaultValue = "", placeholder = "
     return value;
 }
 
-async function askGradient(defaultGradient = "grey") {
+async function askGradient(defaultGradient = "black") {
     const alert = new Alert();
     alert.title = "Choose a color";
     alert.message = "Select the widget background color.";
 
-    AVAILABLE_GRADIENTS.forEach(gradient => {
-        if (gradient === defaultGradient) {
-            alert.addAction(`${gradient} (default)`);
+    AVAILABLE_GRADIENTS.forEach(g => {
+        const displayLabel = `${g.emoji} ${g.label}`;
+        if (g.name === defaultGradient) {
+            alert.addAction(`${displayLabel} (current)`);
         } else {
-            alert.addAction(gradient);
+            alert.addAction(displayLabel);
         }
     });
     alert.addCancelAction("Cancel");
@@ -296,7 +304,7 @@ async function askGradient(defaultGradient = "grey") {
         return null;
     }
 
-    return AVAILABLE_GRADIENTS[selectedIndex];
+    return AVAILABLE_GRADIENTS[selectedIndex].name;
 }
 
 async function searchAndSelectStation(typedStation) {
@@ -636,7 +644,7 @@ async function promptForStationSelection() {
     let defaultStation = "Marienplatz";
     let defaultPlatform = "";
     let defaultLines = "";
-    let defaultGradient = "grey";
+    let defaultGradient = "black";
 
     defaultParams.forEach(param => {
         const trimmedParam = param.trim();
@@ -755,12 +763,12 @@ async function createSavedStation() {
     if (gradient === null) return null;
 
     // Build the parameter string
-    const parameterParts = [`station:${station}`];
-    if (platform) parameterParts.push(`platform:${platform}`);
-    if (lines) parameterParts.push(`lines:${lines}`);
-    parameterParts.push(`gradient:${gradient}`);
+    const parameterParts = [`station: ${station}`];
+    if (platform) parameterParts.push(`platform: ${platform}`);
+    if (lines) parameterParts.push(`lines: ${lines}`);
+    parameterParts.push(`gradient: ${gradient}`);
 
-    const content = parameterParts.join(";");
+    const content = parameterParts.join("; ");
 
     // Save to file
     const fileManager = FileManager.iCloud();
@@ -792,12 +800,148 @@ async function createSavedStation() {
     return profileName;
 }
 
+async function editSavedStation() {
+    const fileManager = FileManager.iCloud();
+    const documentsDirectory = fileManager.documentsDirectory();
+    const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
+
+    // Check if profile directory exists
+    if (!fileManager.fileExists(profileDirectory)) {
+        const errorAlert = new Alert();
+        errorAlert.title = "No Saved Stations";
+        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    // Get list of saved stations
+    const files = fileManager.listContents(profileDirectory)
+        .filter(f => f.endsWith(".txt"))
+        .map(f => f.replace(/\.txt$/, ""));
+
+    if (files.length === 0) {
+        const errorAlert = new Alert();
+        errorAlert.title = "No Saved Stations";
+        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    // Show list of saved stations to select
+    const selectAlert = new Alert();
+    selectAlert.title = "Edit Saved Station";
+    selectAlert.message = "Select a station to edit:";
+    files.forEach(f => selectAlert.addAction(f));
+    selectAlert.addCancelAction("Cancel");
+
+    const selectedIndex = await selectAlert.presentSheet();
+    if (selectedIndex === -1) return null;
+
+    const profileName = files[selectedIndex];
+    const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
+    const content = fileManager.readString(profilePath).trim();
+
+    // Parse existing values
+    let existingStation = "";
+    let existingPlatform = "";
+    let existingLines = "";
+    let existingGradient = "black";
+
+    content.split(";").forEach(param => {
+        const trimmedParam = param.trim();
+        if (!trimmedParam.includes(":")) return;
+
+        const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
+        const value = valueParts.join(":").trim();
+
+        switch (key.toLowerCase()) {
+            case "station":
+                existingStation = value;
+                break;
+            case "platform":
+                existingPlatform = value;
+                break;
+            case "lines":
+                existingLines = value;
+                break;
+            case "gradient":
+            case "background":
+                existingGradient = value;
+                break;
+        }
+    });
+
+    // Station selection
+    const stationInput = await askText({
+        title: "Station",
+        message: "Type the station name to search.",
+        placeholder: existingStation,
+        defaultValue: existingStation
+    });
+    if (stationInput === null) return null;
+
+    const station = await searchAndSelectStation(stationInput);
+    if (station === null) return null;
+
+    // Platform selection (optional)
+    const platform = await askText({
+        title: "Platform (optional)",
+        message: "Filter by platform number.\nLeave empty to show all platforms.",
+        placeholder: existingPlatform || "1",
+        defaultValue: existingPlatform,
+        isOptional: true
+    });
+    if (platform === null) return null;
+
+    // Lines selection (optional)
+    const lines = await askText({
+        title: "Lines (optional)",
+        message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
+        placeholder: existingLines || "S1, S2, U3",
+        defaultValue: existingLines,
+        isOptional: true
+    });
+    if (lines === null) return null;
+
+    // Gradient selection
+    const gradient = await askGradient(existingGradient);
+    if (gradient === null) return null;
+
+    // Build the parameter string
+    const parameterParts = [`station: ${station}`];
+    if (platform) parameterParts.push(`platform: ${platform}`);
+    if (lines) parameterParts.push(`lines: ${lines}`);
+    parameterParts.push(`gradient: ${gradient}`);
+
+    const newContent = parameterParts.join("; ");
+
+    // Save to file
+    fileManager.writeString(profilePath, newContent);
+
+    // Show success
+    const successAlert = new Alert();
+    successAlert.title = "Station Updated!";
+    successAlert.message = `"${profileName}" has been updated.`;
+    successAlert.addAction("Done");
+    successAlert.addAction("Show Saved File");
+
+    const successAction = await successAlert.presentAlert();
+    if (successAction === 1) {
+        QuickLook.present(profilePath);
+    }
+
+    return profileName;
+}
+
 async function showMainMenu() {
     const menu = new Alert();
     menu.title = "Munich Commute Widget";
     menu.message = "What would you like to do?";
     menu.addAction("Find Station");
     menu.addAction("Create Saved Station");
+    menu.addAction("Edit Saved Station");
     menu.addCancelAction("Cancel");
 
     const selectedAction = await menu.presentSheet();
@@ -841,6 +985,13 @@ async function main() {
             const savedProfile = await createSavedStation();
             if (savedProfile) {
                 console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
+            }
+            return;
+        } else if (menuChoice === 2) {
+            // Edit Saved Station - wizard
+            const editedProfile = await editSavedStation();
+            if (editedProfile) {
+                console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
             }
             return;
         } else {
