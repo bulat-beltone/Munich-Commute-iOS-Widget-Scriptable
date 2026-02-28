@@ -213,10 +213,10 @@ parameters.forEach(param => {
             hasExplicitStation = true;
             break;
         case "platform":
-            userPlatforms = value ? Number(value) : null;
+            userPlatforms = parsePlatformFilter(value);
             break;
         case "lines":
-            userLines = value ? value.split(",").map(line => line.trim()) : null;
+            userLines = parseLineFilter(value);
             break;
         case "gradient":
         case "background": // backward compatibility
@@ -250,6 +250,25 @@ function sanitizeProfileName(inputName) {
         .trim()
         .replace(/\.txt$/i, "")
         .replace(/[\\/:*?"<>|]/g, "_");
+}
+
+function parseCommaSeparatedFilter(value, normalizer = text => text) {
+    if (!value) return null;
+
+    const parsedValues = value
+        .split(",")
+        .map(part => normalizer(part.trim()))
+        .filter(Boolean);
+
+    return parsedValues.length ? parsedValues : null;
+}
+
+function parsePlatformFilter(value) {
+    return parseCommaSeparatedFilter(value, platform => platform.replace(/^0+/, "") || "0");
+}
+
+function parseLineFilter(value) {
+    return parseCommaSeparatedFilter(value, line => line.toUpperCase());
 }
 
 function getLineColor(transportType, label) {
@@ -441,8 +460,12 @@ async function createWidget() {
 
     console.log('[INFO] Step 5: Filtering departures by user preferences...');
     departures = departures.filter(entry => {
-        const lineMatches = userLines ? userLines.includes(entry.label) : true;
-        const platformMatches = userPlatforms ? entry.platform === userPlatforms : true;
+        const lineLabel = (entry.label || "").toUpperCase();
+        const platformLabel = entry.platform !== undefined && entry.platform !== null
+            ? String(entry.platform).trim().replace(/^0+/, "") || "0"
+            : null;
+        const lineMatches = userLines ? userLines.includes(lineLabel) : true;
+        const platformMatches = userPlatforms ? userPlatforms.includes(platformLabel) : true;
         return lineMatches && platformMatches;
     });
     console.log(`[INFO]   - Departures after filter: ${departures.length}`);
@@ -733,16 +756,6 @@ async function findNearestStation() {
         }
     });
 
-    // Platform selection (optional)
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: `Nearest station: ${nearestStation}\n\nFilter by platform number.\nLeave empty to show all platforms.`,
-        placeholder: defaultPlatform || "1",
-        defaultValue: defaultPlatform,
-        isOptional: true
-    });
-    if (platform === null) return null;
-
     // Lines selection (optional)
     const lines = await askText({
         title: "Lines (optional)",
@@ -752,6 +765,16 @@ async function findNearestStation() {
         isOptional: true
     });
     if (lines === null) return null;
+
+    // Platform selection (optional)
+    const platform = await askText({
+        title: "Platform (optional)",
+        message: `Nearest station: ${nearestStation}\n\nFilter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.`,
+        placeholder: defaultPlatform || "1, 2",
+        defaultValue: defaultPlatform,
+        isOptional: true
+    });
+    if (platform === null) return null;
 
     // Return a config object to apply to the widget (no gradient for Find Nearest Station)
     return {
@@ -809,16 +832,6 @@ async function promptForStationSelection() {
     const station = await searchAndSelectStation(stationInput);
     if (station === null) return null;
 
-    // Platform selection (optional)
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: "Filter by platform number.\nLeave empty to show all platforms.",
-        placeholder: defaultPlatform || "1",
-        defaultValue: defaultPlatform,
-        isOptional: true
-    });
-    if (platform === null) return null;
-
     // Lines selection (optional)
     const lines = await askText({
         title: "Lines (optional)",
@@ -828,6 +841,16 @@ async function promptForStationSelection() {
         isOptional: true
     });
     if (lines === null) return null;
+
+    // Platform selection (optional)
+    const platform = await askText({
+        title: "Platform (optional)",
+        message: "Filter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.",
+        placeholder: defaultPlatform || "1, 2",
+        defaultValue: defaultPlatform,
+        isOptional: true
+    });
+    if (platform === null) return null;
 
     // Return a config object to apply to the widget (no gradient for Find Station)
     return {
@@ -867,14 +890,6 @@ async function createSavedStation() {
     const station = await searchAndSelectStation(stationInput);
     if (station === null) return null;
 
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: "Filter by platform number.\nLeave empty to show all platforms.",
-        placeholder: "1",
-        isOptional: true
-    });
-    if (platform === null) return null;
-
     const lines = await askText({
         title: "Lines (optional)",
         message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
@@ -883,13 +898,21 @@ async function createSavedStation() {
     });
     if (lines === null) return null;
 
+    const platform = await askText({
+        title: "Platform (optional)",
+        message: "Filter by platform numbers (comma-separated), e.g. 1, 2.\nLeave empty to show all platforms.",
+        placeholder: "1, 2",
+        isOptional: true
+    });
+    if (platform === null) return null;
+
     const gradient = await askGradient();
     if (gradient === null) return null;
 
     // Build the parameter string
     const parameterParts = [`station: ${station}`];
-    if (platform) parameterParts.push(`platform: ${platform}`);
     if (lines) parameterParts.push(`lines: ${lines}`);
+    if (platform) parameterParts.push(`platform: ${platform}`);
     parameterParts.push(`gradient: ${gradient}`);
 
     const content = parameterParts.join("; ");
@@ -1009,16 +1032,6 @@ async function editSavedStation() {
     const station = await searchAndSelectStation(stationInput);
     if (station === null) return null;
 
-    // Platform selection (optional)
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: "Filter by platform number.\nLeave empty to show all platforms.",
-        placeholder: existingPlatform || "1",
-        defaultValue: existingPlatform,
-        isOptional: true
-    });
-    if (platform === null) return null;
-
     // Lines selection (optional)
     const lines = await askText({
         title: "Lines (optional)",
@@ -1029,14 +1042,24 @@ async function editSavedStation() {
     });
     if (lines === null) return null;
 
+    // Platform selection (optional)
+    const platform = await askText({
+        title: "Platform (optional)",
+        message: "Filter by platform numbers (comma-separated), e.g. 1, 2.\nLeave empty to show all platforms.",
+        placeholder: existingPlatform || "1, 2",
+        defaultValue: existingPlatform,
+        isOptional: true
+    });
+    if (platform === null) return null;
+
     // Gradient selection
     const gradient = await askGradient(existingGradient);
     if (gradient === null) return null;
 
     // Build the parameter string
     const parameterParts = [`station: ${station}`];
-    if (platform) parameterParts.push(`platform: ${platform}`);
     if (lines) parameterParts.push(`lines: ${lines}`);
+    if (platform) parameterParts.push(`platform: ${platform}`);
     parameterParts.push(`gradient: ${gradient}`);
 
     const newContent = parameterParts.join("; ");
@@ -1096,8 +1119,8 @@ async function main() {
             const config = await findNearestStation();
             if (config) {
                 userStation = config.station;
-                userPlatforms = config.platform ? Number(config.platform) : null;
-                userLines = config.lines ? config.lines.split(",").map(line => line.trim()) : null;
+                userPlatforms = parsePlatformFilter(config.platform);
+                userLines = parseLineFilter(config.lines);
                 userGradient = config.gradient;
                 console.log(`[INFO]   - Station configured from nearest station: '${userStation}'`);
             } else {
