@@ -267,6 +267,15 @@ function parsePlatformFilter(value) {
     return parseCommaSeparatedFilter(value, platform => platform.replace(/^0+/, "") || "0");
 }
 
+function getPlatformLabels(platformValue) {
+    if (platformValue === undefined || platformValue === null) return [];
+
+    return String(platformValue)
+        .split(",")
+        .map(part => part.trim().replace(/^0+/, "") || "0")
+        .filter(Boolean);
+}
+
 function parseLineFilter(value) {
     return parseCommaSeparatedFilter(value, line => line.toUpperCase());
 }
@@ -461,11 +470,11 @@ async function createWidget() {
     console.log('[INFO] Step 5: Filtering departures by user preferences...');
     departures = departures.filter(entry => {
         const lineLabel = (entry.label || "").toUpperCase();
-        const platformLabel = entry.platform !== undefined && entry.platform !== null
-            ? String(entry.platform).trim().replace(/^0+/, "") || "0"
-            : null;
+        const platformLabels = getPlatformLabels(entry.platform);
         const lineMatches = userLines ? userLines.includes(lineLabel) : true;
-        const platformMatches = userPlatforms ? userPlatforms.includes(platformLabel) : true;
+        const platformMatches = userPlatforms
+            ? platformLabels.some(platformLabel => userPlatforms.includes(platformLabel))
+            : true;
         return lineMatches && platformMatches;
     });
     console.log(`[INFO]   - Departures after filter: ${departures.length}`);
@@ -947,6 +956,97 @@ async function createSavedStation() {
     return profileName;
 }
 
+async function viewSavedStation() {
+    const fileManager = FileManager.iCloud();
+    const documentsDirectory = fileManager.documentsDirectory();
+    const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
+
+    if (!fileManager.fileExists(profileDirectory)) {
+        const errorAlert = new Alert();
+        errorAlert.title = "No Saved Stations";
+        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return false;
+    }
+
+    const files = fileManager.listContents(profileDirectory)
+        .filter(f => f.endsWith(".txt"))
+        .map(f => f.replace(/\.txt$/, ""));
+
+    if (files.length === 0) {
+        const errorAlert = new Alert();
+        errorAlert.title = "No Saved Stations";
+        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return false;
+    }
+
+    const selectAlert = new Alert();
+    selectAlert.title = "View Saved Station";
+    selectAlert.message = "Select a station to open:";
+    files.forEach(f => selectAlert.addAction(f));
+    selectAlert.addCancelAction("Cancel");
+
+    const selectedIndex = await selectAlert.presentSheet();
+    if (selectedIndex === -1) return false;
+
+    const profileName = files[selectedIndex];
+    console.log(`[INFO]   - Loading saved station profile: '${profileName}'`);
+
+    const selectedParameterString = resolveWidgetParameter(profileName);
+    const selectedParameters = selectedParameterString ? selectedParameterString.split(";") : [];
+
+    let selectedStation = userStation;
+    let selectedPlatforms = null;
+    let selectedLines = null;
+    let selectedGradient = "black";
+
+    selectedParameters.forEach(param => {
+        const trimmedParam = param.trim();
+        if (!trimmedParam.includes(":")) return;
+
+        const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
+        const value = valueParts.join(":").trim();
+
+        switch (key.toLowerCase()) {
+            case "station":
+                selectedStation = value;
+                break;
+            case "platform":
+                selectedPlatforms = parsePlatformFilter(value);
+                break;
+            case "lines":
+                selectedLines = parseLineFilter(value);
+                break;
+            case "gradient":
+            case "background":
+                if (CONFIG.gradients[value.toLowerCase()]) {
+                    selectedGradient = value.toLowerCase();
+                }
+                break;
+        }
+    });
+
+    userStation = selectedStation;
+    userPlatforms = selectedPlatforms;
+    userLines = selectedLines;
+    userGradient = selectedGradient;
+
+    const previousWidgetFamily = config.widgetFamily;
+    config.widgetFamily = "large";
+
+    try {
+        const widget = await createWidget();
+        await widget.presentLarge();
+    } finally {
+        config.widgetFamily = previousWidgetFamily;
+    }
+
+    return true;
+}
+
 async function editSavedStation() {
     const fileManager = FileManager.iCloud();
     const documentsDirectory = fileManager.documentsDirectory();
@@ -1088,6 +1188,7 @@ async function showMainMenu() {
     menu.message = "What would you like to do?";
     menu.addAction("🔎 Find Nearest Station");
     menu.addAction("➕ Create Saved Station");
+    menu.addAction("👀 View Saved Station");
     menu.addAction("✏️ Edit Saved Station");
     menu.addCancelAction("Cancel");
 
@@ -1135,6 +1236,13 @@ async function main() {
             }
             return;
         } else if (menuChoice === 2) {
+            // View Saved Station - open selected profile in large size
+            const viewedProfile = await viewSavedStation();
+            if (viewedProfile) {
+                console.log('[INFO]   - Viewed saved station profile.');
+            }
+            return;
+        } else if (menuChoice === 3) {
             // Edit Saved Station - wizard
             const editedProfile = await editSavedStation();
             if (editedProfile) {
