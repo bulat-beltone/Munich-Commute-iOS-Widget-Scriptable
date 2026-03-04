@@ -1129,8 +1129,13 @@ async function editSavedStation() {
     });
     if (stationInput === null) return null;
 
-    const station = await searchAndSelectStation(stationInput);
-    if (station === null) return null;
+    const stationUnchanged = stationInput.trim().toLowerCase() === existingStation.trim().toLowerCase();
+    let station = existingStation;
+
+    if (!stationUnchanged) {
+        station = await searchAndSelectStation(stationInput);
+        if (station === null) return null;
+    }
 
     // Lines selection (optional)
     const lines = await askText({
@@ -1179,7 +1184,13 @@ async function editSavedStation() {
         QuickLook.present(profilePath);
     }
 
-    return profileName;
+    return {
+        profileName,
+        station,
+        lines,
+        platform,
+        gradient
+    };
 }
 
 async function showMainMenu() {
@@ -1245,10 +1256,18 @@ async function main() {
         } else if (menuChoice === 3) {
             // Edit Saved Station - wizard
             const editedProfile = await editSavedStation();
-            if (editedProfile) {
-                console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
+            if (!editedProfile) {
+                console.log('[INFO]   - User cancelled editing saved station.');
+                return;
             }
-            return;
+
+            userStation = editedProfile.station;
+            userPlatforms = parsePlatformFilter(editedProfile.platform);
+            userLines = parseLineFilter(editedProfile.lines);
+            userGradient = editedProfile.gradient;
+
+            console.log(`[INFO]   - Edited saved station profile: '${editedProfile.profileName}'`);
+            console.log('[INFO]   - Showing updated widget preview.');
         } else {
             // Cancelled
             console.log('[INFO]   - User cancelled main menu.');
