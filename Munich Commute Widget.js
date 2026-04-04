@@ -49,6 +49,7 @@ const CONFIG = {
 
 // Profile directory for saved stations
 const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
+const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
     { name: "red", label: "Red", emoji: "🔴" },
@@ -333,6 +334,33 @@ async function askGradient(defaultGradient = "black") {
     }
 
     return AVAILABLE_GRADIENTS[selectedIndex].name;
+}
+
+async function askGradientOrKeepCurrent(defaultGradient = "black") {
+    const alert = new Alert();
+    alert.title = "Choose a color";
+    alert.message = "Pick a new widget background color, or keep the current one.";
+    alert.addAction(`➡️ Next (keep ${defaultGradient})`);
+
+    AVAILABLE_GRADIENTS.forEach(g => {
+        const displayLabel = `${g.emoji} ${g.label}`;
+        if (g.name === defaultGradient) {
+            alert.addAction(`${displayLabel} (current)`);
+        } else {
+            alert.addAction(displayLabel);
+        }
+    });
+    alert.addCancelAction("Cancel");
+
+    const selectedIndex = await alert.presentSheet();
+    if (selectedIndex === -1) return null;
+    if (selectedIndex === 0) return defaultGradient;
+
+    return AVAILABLE_GRADIENTS[selectedIndex - 1].name;
+}
+
+function getWidgetSetupInstructions(parameterName = "your saved station name") {
+    return `How to add the widget:\n\n1. Go to your Home Screen\n2. Long-press → tap "+"\n3. Search "Scriptable" → Add widget\n4. Long-press the widget → "Edit Widget"\n5. Select "Munich Commute Widget"\n6. Paste "${parameterName}" as Parameter\n\nYouTube tutorial:\n${WIDGET_SETUP_VIDEO_URL}`;
 }
 
 async function searchAndSelectStation(typedStation) {
@@ -871,24 +899,6 @@ async function promptForStationSelection() {
 }
 
 async function createSavedStation() {
-    const profileNameInput = await askText({
-        title: "Saved station name",
-        message: "Give this station a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
-        placeholder: "Home"
-    });
-
-    if (profileNameInput === null) return null;
-
-    const profileName = sanitizeProfileName(profileNameInput);
-    if (!profileName) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Invalid profile name";
-        errorAlert.message = "Please use at least one valid character.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
-        return null;
-    }
-
     const stationInput = await askText({
         title: "Station",
         message: "Type the station name to search.",
@@ -918,6 +928,24 @@ async function createSavedStation() {
     const gradient = await askGradient();
     if (gradient === null) return null;
 
+    const profileNameInput = await askText({
+        title: "Saved station name",
+        message: "Give this station a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
+        placeholder: "Home"
+    });
+
+    if (profileNameInput === null) return null;
+
+    const profileName = sanitizeProfileName(profileNameInput);
+    if (!profileName) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Invalid profile name";
+        errorAlert.message = "Please use at least one valid character.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
     // Build the parameter string
     const parameterParts = [`station: ${station}`];
     if (lines) parameterParts.push(`lines: ${lines}`);
@@ -944,7 +972,7 @@ async function createSavedStation() {
     // Show success with instructions
     const successAlert = new Alert();
     successAlert.title = "Station Saved!";
-    successAlert.message = `"${profileName}" copied to clipboard.\n\nHow to add the widget:\n\n1. Go to your Home Screen\n2. Long-press → tap "+"\n3. Search "Scriptable" → Add widget\n4. Long-press the widget → "Edit Widget"\n5. Select "Munich Commute Widget"\n6. Paste "${profileName}" as Parameter`;
+    successAlert.message = `"${profileName}" copied to clipboard.\n\n${getWidgetSetupInstructions(profileName)}`;
     successAlert.addAction("Done");
     successAlert.addAction("Show Saved File");
 
@@ -1086,9 +1114,9 @@ async function editSavedStation() {
     const selectedIndex = await selectAlert.presentSheet();
     if (selectedIndex === -1) return null;
 
-    const profileName = files[selectedIndex];
-    const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
-    const content = fileManager.readString(profilePath).trim();
+    const originalProfileName = files[selectedIndex];
+    const originalProfilePath = fileManager.joinPath(profileDirectory, `${originalProfileName}.txt`);
+    const content = fileManager.readString(originalProfilePath).trim();
 
     // Parse existing values
     let existingStation = "";
@@ -1153,8 +1181,36 @@ async function editSavedStation() {
     if (platform === null) return null;
 
     // Gradient selection
-    const gradient = await askGradient(existingGradient);
+    const gradient = await askGradientOrKeepCurrent(existingGradient);
     if (gradient === null) return null;
+
+    const updatedProfileNameInput = await askText({
+        title: "Saved station name",
+        message: "Change the saved station name or press Continue to keep it.",
+        placeholder: originalProfileName,
+        defaultValue: originalProfileName
+    });
+    if (updatedProfileNameInput === null) return null;
+
+    const updatedProfileName = sanitizeProfileName(updatedProfileNameInput);
+    if (!updatedProfileName) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Invalid profile name";
+        errorAlert.message = "Please use at least one valid character.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    const updatedProfilePath = fileManager.joinPath(profileDirectory, `${updatedProfileName}.txt`);
+    if (updatedProfileName !== originalProfileName && fileManager.fileExists(updatedProfilePath)) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Name already exists";
+        errorAlert.message = `A saved station named "${updatedProfileName}" already exists.`;
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
 
     // Build the parameter string
     const parameterParts = [`station: ${station}`];
@@ -1165,31 +1221,44 @@ async function editSavedStation() {
     const newContent = parameterParts.join("; ");
 
     // Save to file
-    fileManager.writeString(profilePath, newContent);
+    fileManager.writeString(updatedProfilePath, newContent);
+    if (updatedProfileName !== originalProfileName) {
+        fileManager.remove(originalProfilePath);
+    }
+    Pasteboard.copy(updatedProfileName);
 
     // Show success
     const successAlert = new Alert();
     successAlert.title = "Station Updated!";
-    successAlert.message = `"${profileName}" has been updated.`;
+    successAlert.message = `"${updatedProfileName}" has been updated and copied to clipboard.`;
     successAlert.addAction("Done");
     successAlert.addAction("Show Saved File");
 
     const successAction = await successAlert.presentAlert();
     if (successAction === 1) {
-        QuickLook.present(profilePath);
+        QuickLook.present(updatedProfilePath);
     }
 
-    return profileName;
+    return updatedProfileName;
+}
+
+async function showHowToAddWidgetInstructions() {
+    const instructionsAlert = new Alert();
+    instructionsAlert.title = "How to Add Widget";
+    instructionsAlert.message = getWidgetSetupInstructions("your saved station name");
+    instructionsAlert.addAction("Done");
+    await instructionsAlert.presentAlert();
 }
 
 async function showMainMenu() {
     const menu = new Alert();
     menu.title = "Munich Commute Widget";
     menu.message = "What would you like to do?";
-    menu.addAction("🔎 Find Nearest Station");
     menu.addAction("➕ Create Saved Station");
-    menu.addAction("👀 View Saved Station");
     menu.addAction("✏️ Edit Saved Station");
+    menu.addAction("👀 View Saved Station");
+    menu.addAction("🔎 Find Nearest Station");
+    menu.addAction("ℹ️ How to Add Widget");
     menu.addCancelAction("Cancel");
 
     const selectedAction = await menu.presentSheet();
@@ -1216,6 +1285,27 @@ async function main() {
         const menuChoice = await showMainMenu();
 
         if (menuChoice === 0) {
+            // Create Saved Station - wizard
+            const savedProfile = await createSavedStation();
+            if (savedProfile) {
+                console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
+            }
+            return;
+        } else if (menuChoice === 1) {
+            // Edit Saved Station - wizard
+            const editedProfile = await editSavedStation();
+            if (editedProfile) {
+                console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
+            }
+            return;
+        } else if (menuChoice === 2) {
+            // View Saved Station - open selected profile in large size
+            const viewedProfile = await viewSavedStation();
+            if (viewedProfile) {
+                console.log('[INFO]   - Viewed saved station profile.');
+            }
+            return;
+        } else if (menuChoice === 3) {
             // Find Nearest Station - wizard with geolocation
             const config = await findNearestStation();
             if (config) {
@@ -1228,26 +1318,8 @@ async function main() {
                 console.log('[INFO]   - User cancelled nearest station selection.');
                 return;
             }
-        } else if (menuChoice === 1) {
-            // Create Saved Station - wizard
-            const savedProfile = await createSavedStation();
-            if (savedProfile) {
-                console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
-            }
-            return;
-        } else if (menuChoice === 2) {
-            // View Saved Station - open selected profile in large size
-            const viewedProfile = await viewSavedStation();
-            if (viewedProfile) {
-                console.log('[INFO]   - Viewed saved station profile.');
-            }
-            return;
-        } else if (menuChoice === 3) {
-            // Edit Saved Station - wizard
-            const editedProfile = await editSavedStation();
-            if (editedProfile) {
-                console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
-            }
+        } else if (menuChoice === 4) {
+            await showHowToAddWidgetInstructions();
             return;
         } else {
             // Cancelled
