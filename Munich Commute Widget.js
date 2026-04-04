@@ -340,7 +340,6 @@ async function askGradientOrKeepCurrent(defaultGradient = "black") {
     const alert = new Alert();
     alert.title = "Choose a color";
     alert.message = "Pick a new widget background color, or keep the current one.";
-    alert.addAction(`➡️ Next (keep ${defaultGradient})`);
 
     AVAILABLE_GRADIENTS.forEach(g => {
         const displayLabel = `${g.emoji} ${g.label}`;
@@ -350,17 +349,18 @@ async function askGradientOrKeepCurrent(defaultGradient = "black") {
             alert.addAction(displayLabel);
         }
     });
+    alert.addAction("Continue");
     alert.addCancelAction("Cancel");
 
     const selectedIndex = await alert.presentSheet();
     if (selectedIndex === -1) return null;
-    if (selectedIndex === 0) return defaultGradient;
+    if (selectedIndex === AVAILABLE_GRADIENTS.length) return defaultGradient;
 
-    return AVAILABLE_GRADIENTS[selectedIndex - 1].name;
+    return AVAILABLE_GRADIENTS[selectedIndex].name;
 }
 
 function getWidgetSetupInstructions(parameterName = "your saved station name") {
-    return `How to add the widget:\n\n1. Go to your Home Screen\n2. Long-press → tap "+"\n3. Search "Scriptable" → Add widget\n4. Long-press the widget → "Edit Widget"\n5. Select "Munich Commute Widget"\n6. Paste "${parameterName}" as Parameter\n\nYouTube tutorial:\n${WIDGET_SETUP_VIDEO_URL}`;
+    return `1. Go to your Home Screen\n2. Long-press → tap "+"\n3. Search "Scriptable" → Add widget\n4. Long-press the widget → "Edit Widget"\n5. Select "Munich Commute Widget"\n6. Paste "${parameterName}" as Parameter\n\nYouTube tutorial:\n${WIDGET_SETUP_VIDEO_URL}`;
 }
 
 async function searchAndSelectStation(typedStation) {
@@ -906,8 +906,11 @@ async function createSavedStation() {
     });
     if (stationInput === null) return null;
 
-    const station = await searchAndSelectStation(stationInput);
-    if (station === null) return null;
+    let station = existingStation;
+    if (stationInput !== existingStation) {
+        station = await searchAndSelectStation(stationInput);
+        if (station === null) return null;
+    }
 
     const lines = await askText({
         title: "Lines (optional)",
@@ -1157,8 +1160,11 @@ async function editSavedStation() {
     });
     if (stationInput === null) return null;
 
-    const station = await searchAndSelectStation(stationInput);
-    if (station === null) return null;
+    let station = existingStation;
+    if (stationInput !== existingStation) {
+        station = await searchAndSelectStation(stationInput);
+        if (station === null) return null;
+    }
 
     // Lines selection (optional)
     const lines = await askText({
