@@ -906,11 +906,8 @@ async function createSavedStation() {
     });
     if (stationInput === null) return null;
 
-    let station = existingStation;
-    if (stationInput !== existingStation) {
-        station = await searchAndSelectStation(stationInput);
-        if (station === null) return null;
-    }
+    const station = await searchAndSelectStation(stationInput);
+    if (station === null) return null;
 
     const lines = await askText({
         title: "Lines (optional)",
