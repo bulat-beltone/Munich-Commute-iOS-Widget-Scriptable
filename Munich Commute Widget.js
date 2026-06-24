@@ -137,7 +137,7 @@ const LINE_COLORS = {
         S7: "#A6372B",
         S20: "#E84563",
         // S8 has black background with yellow text
-        S8: "#ffffff1a", // transparent white 10%
+        S8: "#ffffff1f", // transparent white 12%
         S8_fg: "#f3bc31" // yellow text
     },
     BUS: "#00586A",
