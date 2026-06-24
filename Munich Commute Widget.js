@@ -1081,7 +1081,6 @@ async function editSavedStation() {
     const documentsDirectory = fileManager.documentsDirectory();
     const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
 
-    // Check if profile directory exists
     if (!fileManager.fileExists(profileDirectory)) {
         const errorAlert = new Alert();
         errorAlert.title = "No Saved Stations";
@@ -1091,7 +1090,6 @@ async function editSavedStation() {
         return null;
     }
 
-    // Get list of saved stations
     const files = fileManager.listContents(profileDirectory)
         .filter(f => f.endsWith(".txt"))
         .map(f => f.replace(/\.txt$/, ""));
@@ -1105,7 +1103,6 @@ async function editSavedStation() {
         return null;
     }
 
-    // Show list of saved stations to select
     const selectAlert = new Alert();
     selectAlert.title = "Edit Saved Station";
     selectAlert.message = "Select a station to edit:";
@@ -1120,131 +1117,126 @@ async function editSavedStation() {
     const content = fileManager.readString(originalProfilePath).trim();
 
     // Parse existing values
-    let existingStation = "";
-    let existingPlatform = "";
-    let existingLines = "";
-    let existingGradient = "black";
+    let station = "";
+    let platform = "";
+    let lines = "";
+    let gradient = "black";
 
     content.split(";").forEach(param => {
         const trimmedParam = param.trim();
         if (!trimmedParam.includes(":")) return;
-
         const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
         const value = valueParts.join(":").trim();
-
         switch (key.toLowerCase()) {
-            case "station":
-                existingStation = value;
-                break;
-            case "platform":
-                existingPlatform = value;
-                break;
-            case "lines":
-                existingLines = value;
-                break;
+            case "station": station = value; break;
+            case "platform": platform = value; break;
+            case "lines": lines = value; break;
             case "gradient":
-            case "background":
-                existingGradient = value;
-                break;
+            case "background": gradient = value; break;
         }
     });
 
-    // Station selection
-    const stationInput = await askText({
-        title: "Station",
-        message: "Type the station name to search.",
-        placeholder: existingStation,
-        defaultValue: existingStation
-    });
-    if (stationInput === null) return null;
+    let profileName = originalProfileName;
 
-    let station = existingStation;
-    if (stationInput !== existingStation) {
-        station = await searchAndSelectStation(stationInput);
-        if (station === null) return null;
+    // Parameter picker loop — user selects which field to edit
+    while (true) {
+        const editMenu = new Alert();
+        editMenu.title = `Edit: ${profileName}`;
+        editMenu.message = "Select a parameter to edit:";
+        editMenu.addAction(`🚉 Station: ${station || "—"}`);
+        editMenu.addAction(`🚆 Lines: ${lines || "all"}`);
+        editMenu.addAction(`🛤 Platform: ${platform || "all"}`);
+        editMenu.addAction(`🎨 Gradient: ${gradient}`);
+        editMenu.addAction(`📝 Name: ${profileName}`);
+        editMenu.addAction("✅ Save");
+        editMenu.addCancelAction("Cancel");
+
+        const fieldChoice = await editMenu.presentSheet();
+        if (fieldChoice === -1) return null;
+
+        if (fieldChoice === 0) {
+            const stationInput = await askText({
+                title: "Station",
+                message: "Type the station name to search.",
+                placeholder: station,
+                defaultValue: station
+            });
+            if (stationInput === null) return null;
+            if (stationInput !== station) {
+                const newStation = await searchAndSelectStation(stationInput);
+                if (newStation === null) return null;
+                station = newStation;
+            }
+        } else if (fieldChoice === 1) {
+            const newLines = await askText({
+                title: "Lines (optional)",
+                message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
+                placeholder: lines || "S1, S2, U3",
+                defaultValue: lines,
+                isOptional: true
+            });
+            if (newLines === null) return null;
+            lines = newLines;
+        } else if (fieldChoice === 2) {
+            const newPlatform = await askText({
+                title: "Platform (optional)",
+                message: "Filter by platform numbers (comma-separated), e.g. 1, 2.\nLeave empty to show all platforms.",
+                placeholder: platform || "1, 2",
+                defaultValue: platform,
+                isOptional: true
+            });
+            if (newPlatform === null) return null;
+            platform = newPlatform;
+        } else if (fieldChoice === 3) {
+            const newGradient = await askGradientOrKeepCurrent(gradient);
+            if (newGradient === null) return null;
+            gradient = newGradient;
+        } else if (fieldChoice === 4) {
+            const nameInput = await askText({
+                title: "Saved station name",
+                message: "Change the name or press Continue to keep it.",
+                placeholder: profileName,
+                defaultValue: profileName
+            });
+            if (nameInput === null) return null;
+            profileName = sanitizeProfileName(nameInput) || profileName;
+        } else if (fieldChoice === 5) {
+            break; // Save
+        }
     }
 
-    // Lines selection (optional)
-    const lines = await askText({
-        title: "Lines (optional)",
-        message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
-        placeholder: existingLines || "S1, S2, U3",
-        defaultValue: existingLines,
-        isOptional: true
-    });
-    if (lines === null) return null;
-
-    // Platform selection (optional)
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: "Filter by platform numbers (comma-separated), e.g. 1, 2.\nLeave empty to show all platforms.",
-        placeholder: existingPlatform || "1, 2",
-        defaultValue: existingPlatform,
-        isOptional: true
-    });
-    if (platform === null) return null;
-
-    // Gradient selection
-    const gradient = await askGradientOrKeepCurrent(existingGradient);
-    if (gradient === null) return null;
-
-    const updatedProfileNameInput = await askText({
-        title: "Saved station name",
-        message: "Change the saved station name or press Continue to keep it.",
-        placeholder: originalProfileName,
-        defaultValue: originalProfileName
-    });
-    if (updatedProfileNameInput === null) return null;
-
-    const updatedProfileName = sanitizeProfileName(updatedProfileNameInput);
-    if (!updatedProfileName) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Invalid profile name";
-        errorAlert.message = "Please use at least one valid character.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
-        return null;
-    }
-
-    const updatedProfilePath = fileManager.joinPath(profileDirectory, `${updatedProfileName}.txt`);
-    if (updatedProfileName !== originalProfileName && fileManager.fileExists(updatedProfilePath)) {
+    const updatedProfilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
+    if (profileName !== originalProfileName && fileManager.fileExists(updatedProfilePath)) {
         const errorAlert = new Alert();
         errorAlert.title = "Name already exists";
-        errorAlert.message = `A saved station named "${updatedProfileName}" already exists.`;
+        errorAlert.message = `A saved station named "${profileName}" already exists.`;
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return null;
     }
 
-    // Build the parameter string
     const parameterParts = [`station: ${station}`];
     if (lines) parameterParts.push(`lines: ${lines}`);
     if (platform) parameterParts.push(`platform: ${platform}`);
     parameterParts.push(`gradient: ${gradient}`);
 
-    const newContent = parameterParts.join("; ");
-
-    // Save to file
-    fileManager.writeString(updatedProfilePath, newContent);
-    if (updatedProfileName !== originalProfileName) {
+    fileManager.writeString(updatedProfilePath, parameterParts.join("; "));
+    if (profileName !== originalProfileName) {
         fileManager.remove(originalProfilePath);
     }
-    Pasteboard.copy(updatedProfileName);
+    Pasteboard.copy(profileName);
 
-    // Show success
     const successAlert = new Alert();
     successAlert.title = "Station Updated!";
-    successAlert.message = `"${updatedProfileName}" has been updated and copied to clipboard.`;
+    successAlert.message = `"${profileName}" has been updated and copied to clipboard.`;
     successAlert.addAction("Done");
     successAlert.addAction("Show Widget");
     successAlert.addAction("Show Saved File");
 
     const successAction = await successAlert.presentAlert();
     if (successAction === 1) {
-        // Preview the widget with the updated profile's parameters
         const profileContent = fileManager.readString(updatedProfilePath).trim();
-        const profileParams = profileContent.split(";");
-        profileParams.forEach(param => {
+        profileContent.split(";").forEach(param => {
             const trimmedParam = param.trim();
             if (!trimmedParam.includes(":")) return;
             const [key, ...valueParts] = trimmedParam.split(":").map(p => p.trim());
@@ -1271,7 +1263,65 @@ async function editSavedStation() {
         QuickLook.present(updatedProfilePath);
     }
 
-    return updatedProfileName;
+    return profileName;
+}
+
+async function deleteSavedStation() {
+    const fileManager = FileManager.iCloud();
+    const documentsDirectory = fileManager.documentsDirectory();
+    const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
+
+    if (!fileManager.fileExists(profileDirectory)) {
+        const errorAlert = new Alert();
+        errorAlert.title = "No Saved Stations";
+        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return false;
+    }
+
+    const files = fileManager.listContents(profileDirectory)
+        .filter(f => f.endsWith(".txt"))
+        .map(f => f.replace(/\.txt$/, ""));
+
+    if (files.length === 0) {
+        const errorAlert = new Alert();
+        errorAlert.title = "No Saved Stations";
+        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return false;
+    }
+
+    const selectAlert = new Alert();
+    selectAlert.title = "Delete Saved Station";
+    selectAlert.message = "Select a station to delete:";
+    files.forEach(f => selectAlert.addAction(f));
+    selectAlert.addCancelAction("Cancel");
+
+    const selectedIndex = await selectAlert.presentSheet();
+    if (selectedIndex === -1) return false;
+
+    const profileName = files[selectedIndex];
+
+    const confirmAlert = new Alert();
+    confirmAlert.title = "Delete Station?";
+    confirmAlert.message = `Are you sure you want to delete "${profileName}"? This cannot be undone.`;
+    confirmAlert.addDestructiveAction("Delete");
+    confirmAlert.addCancelAction("Cancel");
+
+    const confirmed = await confirmAlert.presentAlert();
+    if (confirmed !== 0) return false;
+
+    fileManager.remove(fileManager.joinPath(profileDirectory, `${profileName}.txt`));
+
+    const successAlert = new Alert();
+    successAlert.title = "Deleted";
+    successAlert.message = `"${profileName}" has been deleted.`;
+    successAlert.addAction("OK");
+    await successAlert.presentAlert();
+
+    return true;
 }
 
 async function showHowToAddWidgetInstructions() {
@@ -1288,6 +1338,7 @@ async function showMainMenu() {
     menu.message = "What would you like to do?";
     menu.addAction("➕ Create Saved Station");
     menu.addAction("✏️ Edit Saved Station");
+    menu.addAction("🗑️ Delete Saved Station");
     menu.addAction("👀 View Saved Station");
     menu.addAction("🔎 Find Nearest Station");
     menu.addAction("ℹ️ How to Add Widget");
@@ -1324,20 +1375,24 @@ async function main() {
             }
             return;
         } else if (menuChoice === 1) {
-            // Edit Saved Station - wizard
+            // Edit Saved Station
             const editedProfile = await editSavedStation();
             if (editedProfile) {
                 console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
             }
             return;
         } else if (menuChoice === 2) {
+            // Delete Saved Station
+            await deleteSavedStation();
+            return;
+        } else if (menuChoice === 3) {
             // View Saved Station - open selected profile in large size
             const viewedProfile = await viewSavedStation();
             if (viewedProfile) {
                 console.log('[INFO]   - Viewed saved station profile.');
             }
             return;
-        } else if (menuChoice === 3) {
+        } else if (menuChoice === 4) {
             // Find Nearest Station - wizard with geolocation
             const config = await findNearestStation();
             if (config) {
@@ -1352,7 +1407,7 @@ async function main() {
                 console.log('[INFO]   - User cancelled nearest station selection.');
                 return;
             }
-        } else if (menuChoice === 4) {
+        } else if (menuChoice === 5) {
             await showHowToAddWidgetInstructions();
             return;
         } else {
