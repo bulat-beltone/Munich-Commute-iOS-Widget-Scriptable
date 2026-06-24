@@ -14,8 +14,8 @@
 const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3, S4";
 
 // Subtract this many minutes from displayed departure times
-const SUBTRACT_MINUTES = 1;
-const SHOW_SUBTRACT_MINUTES = false; // Show "-X" indicator in widget header
+let SUBTRACT_MINUTES = 1;
+let SHOW_SUBTRACT_MINUTES = false; // Show "-X" indicator in widget header
 
 // Transport types to display (set to false to hide a type)
 const TRANSPORT_TYPES = {
@@ -50,6 +50,7 @@ const CONFIG = {
 
 // Profile directory for saved stations
 const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
+const SETTINGS_FILE_NAME = "Munich Commute. Settings.json";
 const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
@@ -1305,6 +1306,71 @@ async function deleteSavedStation() {
     return true;
 }
 
+function loadSettings() {
+    const fileManager = FileManager.iCloud();
+    const settingsPath = fileManager.joinPath(fileManager.documentsDirectory(), SETTINGS_FILE_NAME);
+    if (!fileManager.fileExists(settingsPath)) return;
+    try {
+        const saved = JSON.parse(fileManager.readString(settingsPath));
+        if (saved.transportTypes) Object.assign(TRANSPORT_TYPES, saved.transportTypes);
+        if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
+        if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
+    } catch (e) {
+        console.log(`[WARN] Failed to load settings: ${e}`);
+    }
+}
+
+function saveSettings() {
+    const fileManager = FileManager.iCloud();
+    const settingsPath = fileManager.joinPath(fileManager.documentsDirectory(), SETTINGS_FILE_NAME);
+    fileManager.writeString(settingsPath, JSON.stringify({
+        transportTypes: { ...TRANSPORT_TYPES },
+        subtractMinutes: SUBTRACT_MINUTES,
+        showSubtractMinutes: SHOW_SUBTRACT_MINUTES
+    }, null, 2));
+}
+
+async function showSettings() {
+    while (true) {
+        const menu = new Alert();
+        menu.title = "Settings";
+        menu.message = "Tap a setting to toggle or change it.";
+        menu.addAction(`🚇 S-Bahn: ${TRANSPORT_TYPES.sbahn ? "✅" : "❌"}`);
+        menu.addAction(`🚇 U-Bahn: ${TRANSPORT_TYPES.ubahn ? "✅" : "❌"}`);
+        menu.addAction(`🚌 Bus: ${TRANSPORT_TYPES.bus ? "✅" : "❌"}`);
+        menu.addAction(`🚌 Regional Bus: ${TRANSPORT_TYPES.regionalBus ? "✅" : "❌"}`);
+        menu.addAction(`🚊 Tram: ${TRANSPORT_TYPES.tram ? "✅" : "❌"}`);
+        menu.addAction(`🚂 Train: ${TRANSPORT_TYPES.train ? "✅" : "❌"}`);
+        menu.addAction(`⏱ Subtract Minutes: ${SUBTRACT_MINUTES}`);
+        menu.addAction(`📊 Show Offset Label: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}`);
+        menu.addAction("✅ Save");
+        menu.addCancelAction("Cancel");
+
+        const choice = await menu.presentSheet();
+
+        if (choice === 0) TRANSPORT_TYPES.sbahn = !TRANSPORT_TYPES.sbahn;
+        else if (choice === 1) TRANSPORT_TYPES.ubahn = !TRANSPORT_TYPES.ubahn;
+        else if (choice === 2) TRANSPORT_TYPES.bus = !TRANSPORT_TYPES.bus;
+        else if (choice === 3) TRANSPORT_TYPES.regionalBus = !TRANSPORT_TYPES.regionalBus;
+        else if (choice === 4) TRANSPORT_TYPES.tram = !TRANSPORT_TYPES.tram;
+        else if (choice === 5) TRANSPORT_TYPES.train = !TRANSPORT_TYPES.train;
+        else if (choice === 6) {
+            const input = await askText({
+                title: "Subtract Minutes",
+                message: "Minutes to subtract from all departure times.",
+                defaultValue: String(SUBTRACT_MINUTES),
+                placeholder: "1"
+            });
+            if (input === null) return;
+            const parsed = parseInt(input, 10);
+            if (!isNaN(parsed) && parsed >= 0) SUBTRACT_MINUTES = parsed;
+        }
+        else if (choice === 7) SHOW_SUBTRACT_MINUTES = !SHOW_SUBTRACT_MINUTES;
+        else if (choice === 8) { saveSettings(); return; }
+        else return; // Cancel
+    }
+}
+
 async function showHowToAddWidgetInstructions() {
     const instructionsAlert = new Alert();
     instructionsAlert.title = "How to Add Widget";
@@ -1322,6 +1388,7 @@ async function showMainMenu() {
     menu.addAction("🗑️ Delete Saved Station");
     menu.addAction("👀 View Saved Station");
     menu.addAction("🔎 Find Nearest Station");
+    menu.addAction("⚙️ Settings");
     menu.addAction("ℹ️ How to Add Widget");
     menu.addCancelAction("Cancel");
 
@@ -1335,6 +1402,7 @@ async function showMainMenu() {
 
 async function main() {
     console.log('[INFO] Munich Commute Widget script started');
+    loadSettings();
     console.log('[INFO] Step 1: Parsing parameters...');
     console.log(`[INFO]   - Station: '${userStation}'`);
     console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
@@ -1389,6 +1457,9 @@ async function main() {
                 return;
             }
         } else if (menuChoice === 5) {
+            await showSettings();
+            return;
+        } else if (menuChoice === 6) {
             await showHowToAddWidgetInstructions();
             return;
         } else {
