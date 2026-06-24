@@ -38,6 +38,7 @@ const CONFIG = {
 
     // Gradient backgrounds
     gradients: {
+        black: { top: "#1A1A1A", bottom: "#0A0A0A" },
         grey: { top: "#2A2A2A", bottom: "#1A1A1A" },
         red: { top: "#471F23", bottom: "#1E0B0D" },
         blue: { top: "#1F2347", bottom: "#0B0D1E" },
@@ -1315,7 +1316,9 @@ async function main() {
                 userStation = config.station;
                 userPlatforms = parsePlatformFilter(config.platform);
                 userLines = parseLineFilter(config.lines);
-                userGradient = config.gradient;
+                if (config.gradient && CONFIG.gradients[config.gradient]) {
+                    userGradient = config.gradient;
+                }
                 console.log(`[INFO]   - Station configured from nearest station: '${userStation}'`);
             } else {
                 console.log('[INFO]   - User cancelled nearest station selection.');
