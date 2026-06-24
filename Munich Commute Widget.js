@@ -1236,10 +1236,38 @@ async function editSavedStation() {
     successAlert.title = "Station Updated!";
     successAlert.message = `"${updatedProfileName}" has been updated and copied to clipboard.`;
     successAlert.addAction("Done");
+    successAlert.addAction("Show Widget");
     successAlert.addAction("Show Saved File");
 
     const successAction = await successAlert.presentAlert();
     if (successAction === 1) {
+        // Preview the widget with the updated profile's parameters
+        const profileContent = fileManager.readString(updatedProfilePath).trim();
+        const profileParams = profileContent.split(";");
+        profileParams.forEach(param => {
+            const trimmedParam = param.trim();
+            if (!trimmedParam.includes(":")) return;
+            const [key, ...valueParts] = trimmedParam.split(":").map(p => p.trim());
+            const value = valueParts.join(":").trim();
+            switch (key.toLowerCase()) {
+                case "station": userStation = value; break;
+                case "platform": userPlatforms = parsePlatformFilter(value); break;
+                case "lines": userLines = parseLineFilter(value); break;
+                case "gradient":
+                case "background":
+                    if (CONFIG.gradients[value.toLowerCase()]) userGradient = value.toLowerCase();
+                    break;
+            }
+        });
+        const previousWidgetFamily = config.widgetFamily;
+        config.widgetFamily = "large";
+        try {
+            const widget = await createWidget();
+            await widget.presentLarge();
+        } finally {
+            config.widgetFamily = previousWidgetFamily;
+        }
+    } else if (successAction === 2) {
         QuickLook.present(updatedProfilePath);
     }
 
