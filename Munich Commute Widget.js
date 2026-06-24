@@ -970,16 +970,19 @@ async function createSavedStation() {
     // Copy profile name to clipboard
     Pasteboard.copy(profileName);
 
-    // Show success with instructions
-    const successAlert = new Alert();
-    successAlert.title = "Station Saved!";
-    successAlert.message = `"${profileName}" copied to clipboard.\n\n${getWidgetSetupInstructions(profileName)}`;
-    successAlert.addAction("Done");
-    successAlert.addAction("Show Saved File");
+    // Show widget preview directly
+    userStation = station;
+    userPlatforms = parsePlatformFilter(platform);
+    userLines = parseLineFilter(lines);
+    if (CONFIG.gradients[gradient]) userGradient = gradient;
 
-    const successAction = await successAlert.presentAlert();
-    if (successAction === 1) {
-        QuickLook.present(profilePath);
+    const previousWidgetFamily = config.widgetFamily;
+    config.widgetFamily = "large";
+    try {
+        const widget = await createWidget();
+        await widget.presentLarge();
+    } finally {
+        config.widgetFamily = previousWidgetFamily;
     }
 
     return profileName;
@@ -1226,41 +1229,19 @@ async function editSavedStation() {
     }
     Pasteboard.copy(profileName);
 
-    const successAlert = new Alert();
-    successAlert.title = "Station Updated!";
-    successAlert.message = `"${profileName}" has been updated and copied to clipboard.`;
-    successAlert.addAction("Done");
-    successAlert.addAction("Show Widget");
-    successAlert.addAction("Show Saved File");
+    // Show widget preview directly
+    userStation = station;
+    userPlatforms = parsePlatformFilter(platform);
+    userLines = parseLineFilter(lines);
+    if (CONFIG.gradients[gradient]) userGradient = gradient;
 
-    const successAction = await successAlert.presentAlert();
-    if (successAction === 1) {
-        const profileContent = fileManager.readString(updatedProfilePath).trim();
-        profileContent.split(";").forEach(param => {
-            const trimmedParam = param.trim();
-            if (!trimmedParam.includes(":")) return;
-            const [key, ...valueParts] = trimmedParam.split(":").map(p => p.trim());
-            const value = valueParts.join(":").trim();
-            switch (key.toLowerCase()) {
-                case "station": userStation = value; break;
-                case "platform": userPlatforms = parsePlatformFilter(value); break;
-                case "lines": userLines = parseLineFilter(value); break;
-                case "gradient":
-                case "background":
-                    if (CONFIG.gradients[value.toLowerCase()]) userGradient = value.toLowerCase();
-                    break;
-            }
-        });
-        const previousWidgetFamily = config.widgetFamily;
-        config.widgetFamily = "large";
-        try {
-            const widget = await createWidget();
-            await widget.presentLarge();
-        } finally {
-            config.widgetFamily = previousWidgetFamily;
-        }
-    } else if (successAction === 2) {
-        QuickLook.present(updatedProfilePath);
+    const previousWidgetFamily = config.widgetFamily;
+    config.widgetFamily = "large";
+    try {
+        const widget = await createWidget();
+        await widget.presentLarge();
+    } finally {
+        config.widgetFamily = previousWidgetFamily;
     }
 
     return profileName;
