@@ -17,6 +17,11 @@ const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3,
 let SUBTRACT_MINUTES = 1;
 let SHOW_SUBTRACT_MINUTES = false; // Show "-X" indicator in widget header
 
+// Default parameters pre-filled in the Find Nearest Station flow
+let NEAREST_DEFAULT_LINES = "";
+let NEAREST_DEFAULT_PLATFORM = "";
+let NEAREST_DEFAULT_GRADIENT = "grey";
+
 // Transport types to display (set to false to hide a type)
 const TRANSPORT_TYPES = {
     sbahn: true,
@@ -768,59 +773,31 @@ async function findNearestStation() {
     const selectedDistance = nearestStations[selectedIndex].distanceInMeters;
     console.log(`[INFO] Selected station: ${nearestStation} (${selectedDistance}m away)`);
 
-    // Parse default parameters for prefill
-    const defaultParams = DEFAULT_WIDGET_PARAMETERS.split(";");
-    let defaultPlatform = "";
-    let defaultLines = "";
-    let defaultGradient = "grey";
-
-    defaultParams.forEach(param => {
-        const trimmedParam = param.trim();
-        if (!trimmedParam.includes(":")) return;
-
-        const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
-        const value = valueParts.join(":").trim();
-
-        switch (key.toLowerCase()) {
-            case "platform":
-                defaultPlatform = value;
-                break;
-            case "lines":
-                defaultLines = value;
-                break;
-            case "gradient":
-            case "background":
-                defaultGradient = value;
-                break;
-        }
-    });
-
-    // Lines selection (optional)
+    // Lines selection (optional) — pre-filled from Settings
     const lines = await askText({
         title: "Lines (optional)",
         message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
-        placeholder: defaultLines || "S1, S2, U3",
-        defaultValue: defaultLines,
+        placeholder: NEAREST_DEFAULT_LINES || "S1, S2, U3",
+        defaultValue: NEAREST_DEFAULT_LINES,
         isOptional: true
     });
     if (lines === null) return null;
 
-    // Platform selection (optional)
+    // Platform selection (optional) — pre-filled from Settings
     const platform = await askText({
         title: "Platform (optional)",
         message: `Nearest station: ${nearestStation}\n\nFilter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.`,
-        placeholder: defaultPlatform || "1, 2",
-        defaultValue: defaultPlatform,
+        placeholder: NEAREST_DEFAULT_PLATFORM || "1, 2",
+        defaultValue: NEAREST_DEFAULT_PLATFORM,
         isOptional: true
     });
     if (platform === null) return null;
 
-    // Return a config object to apply to the widget (no gradient for Find Nearest Station)
     return {
         station: nearestStation,
         platform: platform,
         lines: lines,
-        gradient: defaultGradient // Use default gradient from config
+        gradient: NEAREST_DEFAULT_GRADIENT
     };
 }
 
@@ -1315,6 +1292,9 @@ function loadSettings() {
         if (saved.transportTypes) Object.assign(TRANSPORT_TYPES, saved.transportTypes);
         if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
         if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
+        if (typeof saved.nearestDefaultLines === "string") NEAREST_DEFAULT_LINES = saved.nearestDefaultLines;
+        if (typeof saved.nearestDefaultPlatform === "string") NEAREST_DEFAULT_PLATFORM = saved.nearestDefaultPlatform;
+        if (saved.nearestDefaultGradient && CONFIG.gradients[saved.nearestDefaultGradient]) NEAREST_DEFAULT_GRADIENT = saved.nearestDefaultGradient;
     } catch (e) {
         console.log(`[WARN] Failed to load settings: ${e}`);
     }
@@ -1326,7 +1306,10 @@ function saveSettings() {
     fileManager.writeString(settingsPath, JSON.stringify({
         transportTypes: { ...TRANSPORT_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
-        showSubtractMinutes: SHOW_SUBTRACT_MINUTES
+        showSubtractMinutes: SHOW_SUBTRACT_MINUTES,
+        nearestDefaultLines: NEAREST_DEFAULT_LINES,
+        nearestDefaultPlatform: NEAREST_DEFAULT_PLATFORM,
+        nearestDefaultGradient: NEAREST_DEFAULT_GRADIENT
     }, null, 2));
 }
 
@@ -1343,6 +1326,9 @@ async function showSettings() {
         menu.addAction(`🚂 Train: ${TRANSPORT_TYPES.train ? "✅" : "❌"}`);
         menu.addAction(`⏱ Subtract Minutes: ${SUBTRACT_MINUTES}`);
         menu.addAction(`📊 Show Offset Label: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}`);
+        menu.addAction(`🔎 Find Nearest — Lines: ${NEAREST_DEFAULT_LINES || "all"}`);
+        menu.addAction(`🔎 Find Nearest — Platform: ${NEAREST_DEFAULT_PLATFORM || "all"}`);
+        menu.addAction(`🔎 Find Nearest — Gradient: ${NEAREST_DEFAULT_GRADIENT}`);
         menu.addAction("✅ Save");
         menu.addCancelAction("Cancel");
 
@@ -1366,7 +1352,34 @@ async function showSettings() {
             if (!isNaN(parsed) && parsed >= 0) SUBTRACT_MINUTES = parsed;
         }
         else if (choice === 7) SHOW_SUBTRACT_MINUTES = !SHOW_SUBTRACT_MINUTES;
-        else if (choice === 8) { saveSettings(); return; }
+        else if (choice === 8) {
+            const input = await askText({
+                title: "Find Nearest — Default Lines",
+                message: "Lines to pre-fill when using Find Nearest Station (comma-separated).\nLeave empty to show all.",
+                defaultValue: NEAREST_DEFAULT_LINES,
+                placeholder: "S1, S2, U3",
+                isOptional: true
+            });
+            if (input === null) return;
+            NEAREST_DEFAULT_LINES = input;
+        }
+        else if (choice === 9) {
+            const input = await askText({
+                title: "Find Nearest — Default Platform",
+                message: "Platform to pre-fill when using Find Nearest Station.\nLeave empty to show all.",
+                defaultValue: NEAREST_DEFAULT_PLATFORM,
+                placeholder: "1, 2",
+                isOptional: true
+            });
+            if (input === null) return;
+            NEAREST_DEFAULT_PLATFORM = input;
+        }
+        else if (choice === 10) {
+            const newGradient = await askGradientOrKeepCurrent(NEAREST_DEFAULT_GRADIENT);
+            if (newGradient === null) return;
+            NEAREST_DEFAULT_GRADIENT = newGradient;
+        }
+        else if (choice === 11) { saveSettings(); return; }
         else return; // Cancel
     }
 }
