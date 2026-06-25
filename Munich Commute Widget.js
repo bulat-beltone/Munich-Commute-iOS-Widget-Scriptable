@@ -81,7 +81,7 @@ const MAIN_MENU_ACTIONS = Object.freeze([
     { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Saved Station" },
     { id: MAIN_MENU_ACTION.EDIT_SAVED_STATION, label: "✏️ Edit Saved Station" },
     { id: MAIN_MENU_ACTION.DELETE_SAVED_STATION, label: "🗑️ Delete Saved Station" },
-    { id: MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET, label: "ℹ️ How to Add Widget" }
+    { id: MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET, label: "ℹ️ How to Add Widget" },
     { id: MAIN_MENU_ACTION.SETTINGS, label: "⚙️ Settings" },
 ]);
 
