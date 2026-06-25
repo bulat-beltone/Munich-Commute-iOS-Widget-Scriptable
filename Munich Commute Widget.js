@@ -386,8 +386,12 @@ async function askGradientOrKeepCurrent(defaultGradient = "black") {
     return AVAILABLE_GRADIENTS[selectedIndex].name;
 }
 
-function getWidgetSetupInstructions(parameterName = "your saved station name") {
-    return `1. Go to your Home Screen\n2. Long-press → tap "+"\n3. Search "Scriptable" → Add widget\n4. Long-press the widget → "Edit Widget"\n5. Select "Munich Commute Widget"\n6. Paste "${parameterName}" as Parameter\n\nYouTube tutorial:\n${WIDGET_SETUP_VIDEO_URL}`;
+function getWidgetSetupInstructions() {
+    return `1. Open Scriptable app\n2. Run "Munich Commute Widget"\n3. Tap ➕ Create Saved Station\n4. Follow the wizard\n\nThen add the widget:\n\nLong-press Home Screen → "+"\nSearch "Scriptable" → add widget\nLong-press widget → "Edit Widget"\n\nScript: "Munich Commute Widget"\nWhen Interacting: "Run Script"\nParameter: your saved station name`;
+}
+
+function getPostCreateInstructions(parameterName) {
+    return `Station "${parameterName}" saved!\n\nNow add it to your Home Screen:\n\nLong-press Home Screen → "+"\nSearch "Scriptable" → add widget\nLong-press widget → "Edit Widget"\n\nScript: "Munich Commute Widget"\nWhen Interacting: "Run Script"\nParameter: "${parameterName}"\n(already copied to clipboard)`;
 }
 
 async function searchAndSelectStation(typedStation) {
@@ -1521,7 +1525,15 @@ async function showSettings() {
 async function showHowToAddWidgetInstructions() {
     const instructionsAlert = new Alert();
     instructionsAlert.title = "How to Add Widget";
-    instructionsAlert.message = getWidgetSetupInstructions("your saved station name");
+    instructionsAlert.message = getWidgetSetupInstructions();
+    instructionsAlert.addAction("Done");
+    await instructionsAlert.presentAlert();
+}
+
+async function showPostCreateInstructions(profileName) {
+    const instructionsAlert = new Alert();
+    instructionsAlert.title = "Add to Home Screen";
+    instructionsAlert.message = getPostCreateInstructions(profileName);
     instructionsAlert.addAction("Done");
     await instructionsAlert.presentAlert();
 }
@@ -1569,6 +1581,7 @@ async function main() {
             const savedProfile = await createSavedStation();
             if (savedProfile) {
                 console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
+                await showPostCreateInstructions(savedProfile);
             }
             return;
         } else if (menuAction === MAIN_MENU_ACTION.EDIT_SAVED_STATION) {
