@@ -55,6 +55,7 @@ const CONFIG = {
 // Profile directory for saved stations
 const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
 const SETTINGS_FILE_NAME = "Munich Commute. Settings.json";
+const NEAREST_DEFAULTS_FILE_NAME = "Munich Commute. Find Nearest Defaults.txt";
 const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
@@ -798,6 +799,7 @@ async function findNearestStation() {
 
     let lines = DEFAULT_STATION_LINES;
     let platform = DEFAULT_STATION_PLATFORM;
+    const hasDefaults = !!(DEFAULT_STATION_LINES || DEFAULT_STATION_PLATFORM);
 
     while (true) {
         const filterMenu = new Alert();
@@ -806,6 +808,7 @@ async function findNearestStation() {
         filterMenu.addAction(`🚆 Line: ${lines || "all"}`);
         filterMenu.addAction(`🛤 Platform: ${platform || "all"}`);
         filterMenu.addAction("▶️ Show");
+        if (hasDefaults) filterMenu.addAction("▶️ Show without filters");
         filterMenu.addCancelAction("Cancel");
 
         const filterChoice = await filterMenu.presentSheet();
@@ -831,7 +834,11 @@ async function findNearestStation() {
             });
             if (newPlatform === null) return null;
             platform = newPlatform;
+        } else if (filterChoice === 2) {
+            break;
         } else {
+            lines = "";
+            platform = "";
             break;
         }
     }
@@ -1338,10 +1345,6 @@ function loadSettings() {
         if (saved.transportTypes) Object.assign(TRANSPORT_TYPES, saved.transportTypes);
         if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
         if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
-        if (typeof saved.defaultStationLines === "string") DEFAULT_STATION_LINES = saved.defaultStationLines;
-        else if (typeof saved.nearestDefaultLines === "string") DEFAULT_STATION_LINES = saved.nearestDefaultLines;
-        if (typeof saved.defaultStationPlatform === "string") DEFAULT_STATION_PLATFORM = saved.defaultStationPlatform;
-        else if (typeof saved.nearestDefaultPlatform === "string") DEFAULT_STATION_PLATFORM = saved.nearestDefaultPlatform;
     } catch (e) {
         console.log(`[WARN] Failed to load settings: ${e}`);
     }
@@ -1353,10 +1356,39 @@ function saveSettings() {
     fileManager.writeString(settingsPath, JSON.stringify({
         transportTypes: { ...TRANSPORT_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
-        showSubtractMinutes: SHOW_SUBTRACT_MINUTES,
-        defaultStationLines: DEFAULT_STATION_LINES,
-        defaultStationPlatform: DEFAULT_STATION_PLATFORM
+        showSubtractMinutes: SHOW_SUBTRACT_MINUTES
     }, null, 2));
+}
+
+function loadNearestDefaults() {
+    const fileManager = FileManager.iCloud();
+    const path = fileManager.joinPath(fileManager.documentsDirectory(), NEAREST_DEFAULTS_FILE_NAME);
+    if (!fileManager.fileExists(path)) return;
+    try {
+        fileManager.readString(path).split(";").forEach(param => {
+            const trimmed = param.trim();
+            if (!trimmed.includes(":")) return;
+            const [key, ...valueParts] = trimmed.split(":").map(p => p.trim());
+            const value = valueParts.join(":").trim();
+            if (key.toLowerCase() === "lines") DEFAULT_STATION_LINES = value;
+            else if (key.toLowerCase() === "platform") DEFAULT_STATION_PLATFORM = value;
+        });
+    } catch (e) {
+        console.log(`[WARN] Failed to load nearest defaults: ${e}`);
+    }
+}
+
+function saveNearestDefaults() {
+    const fileManager = FileManager.iCloud();
+    const path = fileManager.joinPath(fileManager.documentsDirectory(), NEAREST_DEFAULTS_FILE_NAME);
+    const parts = [];
+    if (DEFAULT_STATION_LINES) parts.push(`lines: ${DEFAULT_STATION_LINES}`);
+    if (DEFAULT_STATION_PLATFORM) parts.push(`platform: ${DEFAULT_STATION_PLATFORM}`);
+    if (parts.length > 0) {
+        fileManager.writeString(path, parts.join("; "));
+    } else if (fileManager.fileExists(path)) {
+        fileManager.remove(path);
+    }
 }
 
 async function showSettings() {
@@ -1419,7 +1451,7 @@ async function showSettings() {
             if (input === null) return;
             DEFAULT_STATION_PLATFORM = input;
         }
-        else if (choice === 10) { saveSettings(); return; }
+        else if (choice === 10) { saveSettings(); saveNearestDefaults(); return; }
         else return; // Cancel
     }
 }
@@ -1455,6 +1487,7 @@ function getMainMenuActionForIndex(selectedIndex) {
 async function main() {
     console.log('[INFO] Munich Commute Widget script started');
     loadSettings();
+    loadNearestDefaults();
     console.log('[INFO] Step 1: Parsing parameters...');
     console.log(`[INFO]   - Station: '${userStation}'`);
     console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
