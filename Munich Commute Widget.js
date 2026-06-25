@@ -15,7 +15,7 @@ const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3,
 
 // Subtract this many minutes from displayed departure times
 let SUBTRACT_MINUTES = 1;
-let SHOW_SUBTRACT_MINUTES = false; // Show "-X" indicator in widget header
+let SHOW_SUBTRACT_MINUTES = true; // Show "-X" indicator in widget header
 
 // Default values pre-filled in Find Nearest and Create New station flows
 let DEFAULT_STATION_LINES = "";
@@ -1403,33 +1403,104 @@ function saveNearestDefaults() {
     }
 }
 
-async function showSettings() {
+async function showSettingsTransportTypes() {
     while (true) {
+        const actions = [
+            { id: "sbahn",       label: `🚇 S-Bahn: ${TRANSPORT_TYPES.sbahn ? "✅" : "❌"}` },
+            { id: "ubahn",       label: `🚇 U-Bahn: ${TRANSPORT_TYPES.ubahn ? "✅" : "❌"}` },
+            { id: "bus",         label: `🚌 Bus: ${TRANSPORT_TYPES.bus ? "✅" : "❌"}` },
+            { id: "regionalBus", label: `🚌 Regional Bus: ${TRANSPORT_TYPES.regionalBus ? "✅" : "❌"}` },
+            { id: "tram",        label: `🚊 Tram: ${TRANSPORT_TYPES.tram ? "✅" : "❌"}` },
+            { id: "train",       label: `🚂 Train: ${TRANSPORT_TYPES.train ? "✅" : "❌"}` },
+            { id: "back",        label: "← Back" },
+        ];
         const menu = new Alert();
-        menu.title = "Settings";
-        menu.message = "Tap a setting to toggle or change it.";
-        menu.addAction(`🚇 S-Bahn: ${TRANSPORT_TYPES.sbahn ? "✅" : "❌"}`);
-        menu.addAction(`🚇 U-Bahn: ${TRANSPORT_TYPES.ubahn ? "✅" : "❌"}`);
-        menu.addAction(`🚌 Bus: ${TRANSPORT_TYPES.bus ? "✅" : "❌"}`);
-        menu.addAction(`🚌 Regional Bus: ${TRANSPORT_TYPES.regionalBus ? "✅" : "❌"}`);
-        menu.addAction(`🚊 Tram: ${TRANSPORT_TYPES.tram ? "✅" : "❌"}`);
-        menu.addAction(`🚂 Train: ${TRANSPORT_TYPES.train ? "✅" : "❌"}`);
-        menu.addAction(`⏱ Subtract Minutes: ${SUBTRACT_MINUTES}`);
-        menu.addAction(`📊 Show Offset Label: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}`);
-        menu.addAction(`🚉 Station Default — Lines: ${DEFAULT_STATION_LINES || "all"}`);
-        menu.addAction(`🚉 Station Default — Platform: ${DEFAULT_STATION_PLATFORM || "all"}`);
-        menu.addAction("✅ Save");
+        menu.title = "Transport Types";
+        menu.message = "Tap to toggle each transport type.";
+        actions.forEach(a => menu.addAction(a.label));
         menu.addCancelAction("Cancel");
 
-        const choice = await menu.presentSheet();
+        const idx = await menu.presentSheet();
+        if (idx === -1) return;
+        const action = actions[idx].id;
+        if (action === "back") return;
 
-        if (choice === 0) TRANSPORT_TYPES.sbahn = !TRANSPORT_TYPES.sbahn;
-        else if (choice === 1) TRANSPORT_TYPES.ubahn = !TRANSPORT_TYPES.ubahn;
-        else if (choice === 2) TRANSPORT_TYPES.bus = !TRANSPORT_TYPES.bus;
-        else if (choice === 3) TRANSPORT_TYPES.regionalBus = !TRANSPORT_TYPES.regionalBus;
-        else if (choice === 4) TRANSPORT_TYPES.tram = !TRANSPORT_TYPES.tram;
-        else if (choice === 5) TRANSPORT_TYPES.train = !TRANSPORT_TYPES.train;
-        else if (choice === 6) {
+        if (action === "sbahn") TRANSPORT_TYPES.sbahn = !TRANSPORT_TYPES.sbahn;
+        else if (action === "ubahn") TRANSPORT_TYPES.ubahn = !TRANSPORT_TYPES.ubahn;
+        else if (action === "bus") TRANSPORT_TYPES.bus = !TRANSPORT_TYPES.bus;
+        else if (action === "regionalBus") TRANSPORT_TYPES.regionalBus = !TRANSPORT_TYPES.regionalBus;
+        else if (action === "tram") TRANSPORT_TYPES.tram = !TRANSPORT_TYPES.tram;
+        else if (action === "train") TRANSPORT_TYPES.train = !TRANSPORT_TYPES.train;
+        saveSettings();
+    }
+}
+
+async function showSettingsStationDefaults() {
+    while (true) {
+        const actions = [
+            { id: "lines",    label: `🚆 Lines: ${DEFAULT_STATION_LINES || "all"}` },
+            { id: "platform", label: `🛤 Platform: ${DEFAULT_STATION_PLATFORM || "all"}` },
+            { id: "back",     label: "← Back" },
+        ];
+        const menu = new Alert();
+        menu.title = "Station Defaults";
+        menu.message = "Pre-filled filters when using Find Nearest Station.";
+        actions.forEach(a => menu.addAction(a.label));
+        menu.addCancelAction("Cancel");
+
+        const idx = await menu.presentSheet();
+        if (idx === -1) return;
+        const action = actions[idx].id;
+        if (action === "back") return;
+
+        if (action === "lines") {
+            const input = await askText({
+                title: "Default Lines",
+                message: "Lines to pre-fill when using Find Nearest Station (comma-separated).\nLeave empty for no default.",
+                defaultValue: DEFAULT_STATION_LINES,
+                placeholder: "S1, S2, U3",
+                isOptional: true
+            });
+            if (input === null) return;
+            DEFAULT_STATION_LINES = input;
+        } else if (action === "platform") {
+            const input = await askText({
+                title: "Default Platform",
+                message: "Platform to pre-fill when using Find Nearest Station.\nLeave empty for no default.",
+                defaultValue: DEFAULT_STATION_PLATFORM,
+                placeholder: "1, 2",
+                isOptional: true
+            });
+            if (input === null) return;
+            DEFAULT_STATION_PLATFORM = input;
+        }
+        saveNearestDefaults();
+    }
+}
+
+async function showSettings() {
+    while (true) {
+        const actions = [
+            { id: "transportTypes",   label: "🚇 Transport Types →" },
+            { id: "stationDefaults",  label: "🚉 Station Defaults →" },
+            { id: "subtractMinutes",  label: `⏱ Subtract Minutes: ${SUBTRACT_MINUTES}` },
+            { id: "showSubtractMins", label: `👁 Show Subtracted Minutes: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}` },
+        ];
+        const menu = new Alert();
+        menu.title = "Settings";
+        menu.message = "Tap a setting to change it.";
+        actions.forEach(a => menu.addAction(a.label));
+        menu.addCancelAction("Done");
+
+        const idx = await menu.presentSheet();
+        if (idx === -1) return;
+        const action = actions[idx].id;
+
+        if (action === "transportTypes") {
+            await showSettingsTransportTypes();
+        } else if (action === "stationDefaults") {
+            await showSettingsStationDefaults();
+        } else if (action === "subtractMinutes") {
             const input = await askText({
                 title: "Subtract Minutes",
                 message: "Minutes to subtract from all departure times.",
@@ -1439,32 +1510,11 @@ async function showSettings() {
             if (input === null) return;
             const parsed = parseInt(input, 10);
             if (!isNaN(parsed) && parsed >= 0) SUBTRACT_MINUTES = parsed;
+            saveSettings();
+        } else if (action === "showSubtractMins") {
+            SHOW_SUBTRACT_MINUTES = !SHOW_SUBTRACT_MINUTES;
+            saveSettings();
         }
-        else if (choice === 7) SHOW_SUBTRACT_MINUTES = !SHOW_SUBTRACT_MINUTES;
-        else if (choice === 8) {
-            const input = await askText({
-                title: "Station Default — Lines",
-                message: "Lines to pre-fill when creating or finding a station (comma-separated).\nLeave empty to show all.",
-                defaultValue: DEFAULT_STATION_LINES,
-                placeholder: "S1, S2, U3",
-                isOptional: true
-            });
-            if (input === null) return;
-            DEFAULT_STATION_LINES = input;
-        }
-        else if (choice === 9) {
-            const input = await askText({
-                title: "Station Default — Platform",
-                message: "Platform to pre-fill when creating or finding a station.\nLeave empty to show all.",
-                defaultValue: DEFAULT_STATION_PLATFORM,
-                placeholder: "1, 2",
-                isOptional: true
-            });
-            if (input === null) return;
-            DEFAULT_STATION_PLATFORM = input;
-        }
-        else if (choice === 10) { saveSettings(); saveNearestDefaults(); return; }
-        else return; // Cancel
     }
 }
 
