@@ -1,127 +1,127 @@
 # Usage Scenarios
 
-Спецификация пользовательских сценариев + ручной QA-чеклист перед публикацией.
+Feature specification and manual QA checklist for pre-publish testing.
 
-Статусы: ✅ работает · ⚠️ частично / есть нюанс · ❌ не сделано
-
----
-
-## 1. Первая установка
-
-**Сценарий:** человек узнаёт о виджете → скачивает Scriptable → копирует скрипт → запускает.
-
-- [ ] Скрипт скопирован в `iCloud Drive/Scriptable/`
-- [ ] При первом запуске (без параметра) открывается главное меню
-- [ ] Видео-инструкция доступна параллельно
-
-**Статус:** ⚠️ Видео идёт **вместе с постом на Reddit** (отдельной кнопки в виджете нет — решено осознанно). При первом запуске человек видит главное меню, дальше идёт в `➕ Create Preset`.
+Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ---
 
-## 2. Создание первого пресета
+## 1. First Install
 
-**Сценарий:** запускает виджет → проходит мастер → добавляет виджет на экран.
+**Scenario:** user discovers the widget → downloads Scriptable → copies the script → runs it.
 
-- [ ] `➕ Create Preset`: поиск станции → выбор точного совпадения
-- [ ] Фильтр линий (опционально)
-- [ ] Фильтр платформы (опционально)
-- [ ] Выбор цвета (градиент)
-- [ ] Имя пресета → имя копируется в буфер
-- [ ] Показывается превью виджета
-- [ ] Показывается инструкция «Add to Home Screen»
-- [ ] Виджет добавлен на экран, вставлено имя пресета в параметр
+- [ ] Script copied to `iCloud Drive/Scriptable/`
+- [ ] First launch (no parameter) opens the main menu
+- [ ] Video walkthrough available alongside
 
-**Статус:** ✅ `createSavedStation` (мастер) + `getPostCreateInstructions`.
+**Status:** ⚠️ Video is published with the Reddit post — no in-app button by design. On first launch the user sees the main menu and proceeds to `➕ Create Preset`.
 
 ---
 
-## 3. Проверка виджета
+## 2. Creating the First Preset
 
-**Сценарий:** разблокировал телефон → смотрит на интересующий виджет.
+**Scenario:** runs the widget → goes through the wizard → adds the widget to the home screen.
 
-- [ ] Виджет показывает актуальные отправления
-- [ ] Тап по виджету открывает большую версию со свежими данными
+- [ ] `➕ Create Preset`: search for a station → select exact match
+- [ ] Line filter (optional)
+- [ ] Platform filter (optional)
+- [ ] Choose colour (gradient)
+- [ ] Preset name → name copied to clipboard
+- [ ] Widget preview shown
+- [ ] "Add to Home Screen" instructions shown
+- [ ] Widget added to home screen with the preset name as the parameter
 
-**Статус:** ✅ Работает.
-⚠️ **Ограничение Apple:** есть задержка перед показом актуальной инфы — iOS сам решает, когда обновлять виджет. Рассказать об этом в видео. Время поездов само по себе сигнализирует о свежести (отдельную метку «обновлено в HH:MM» решили не добавлять).
-
----
-
-## 4. Добавление нового пресета
-
-**Сценарий:** ищет станцию → выбирает точное совпадение → задаёт фильтры по платформе и линиям → выбирает тему → сохраняет как новый пресет.
-
-- [ ] Поиск находит станции, показывает до 10 совпадений
-- [ ] Фильтры линий/платформы применяются
-- [ ] Тема (градиент) выбирается
-- [ ] Пресет сохраняется в `Munich Commute/<Name>.txt`
-
-**Статус:** ✅ `createSavedStation`.
+**Status:** ✅ `createSavedStation` wizard + `getPostCreateInstructions`.
 
 ---
 
-## 5. Поиск ближайшей станции
+## 3. Checking the Widget
 
-**Сценарий:** включает геолокацию → находит ближайшие станции → выбирает одну, чтобы посмотреть отправления, когда он не в обычной точке.
+**Scenario:** unlocks phone → glances at the widget.
 
-- [ ] Запрос геолокации, обработка отказа в доступе
-- [ ] Список ближайших станций с расстоянием
-- [ ] Меню фильтров: Line / Platform / Show / Save as Preset / (Show without filters)
-- [ ] `▶️ Show` → превью → после закрытия снова меню (можно поправить фильтры и показать заново)
-- [ ] `💾 Save as Preset` → выбор цвета (градиент) → имя → сохранение найденной станции как пресета
-- [ ] `Cancel` → выход, когда закончил
-- [ ] `Show without filters` показывает всё, но не затирает дефолты
+- [ ] Widget shows current departures
+- [ ] Tapping the widget opens a full-size view with fresh data
 
-**Статус:** ✅ `findNearestStation` (зацикленное меню + сохранение). Цель фичи — «быстро глянуть, что рядом»; сохранение опционально, без раздражающих промптов.
+**Status:** ✅ Works.
+⚠️ **Apple limitation:** there is a delay before the widget reflects live data — iOS decides when to refresh. Explain this in the video. Departure times themselves indicate freshness (a "last updated HH:MM" label was considered and intentionally omitted).
 
 ---
 
-## 6. Проверка с учётом задержек
+## 4. Adding a New Preset
 
-**Сценарий:** следующее отправление задерживается; нужно показать задержку ясно, не теряя читаемости времени, линии и направления.
+**Scenario:** searches for a station → selects exact match → sets platform and line filters → picks a colour → saves as a new preset.
 
-- [ ] Плановое время показывается белым
-- [ ] Опоздание (минуты) показывается красным
-- [ ] Линия, направление, платформа остаются читаемыми
+- [ ] Search returns stations, shows up to 10 matches
+- [ ] Line / platform filters applied
+- [ ] Colour (gradient) selected
+- [ ] Preset saved to `Munich Commute/<Name>.txt`
 
-**Статус:** ✅ Реализовано в `createWidget` (ветка `delayInMinutes > 0`).
-
----
-
-## 7. Редактирование существующего пресета
-
-**Сценарий:** меняет имя станции / фильтр платформы / линии без пересоздания настройки с нуля.
-
-- [ ] `✏️ Edit Preset`: выбор пресета
-- [ ] Точечное редактирование каждого поля (станция, линии, платформа, градиент, имя)
-- [ ] Защита от перезаписи существующего имени
-- [ ] Показывается превью после сохранения
-
-**Статус:** ✅ `editSavedStation`.
+**Status:** ✅ `createSavedStation`.
 
 ---
 
-## 8. Удаление пресета
+## 5. Finding the Nearest Station
 
-- [ ] `🗑️ Delete Preset`: выбор → подтверждение → удаление файла
+**Scenario:** enables location → finds nearby stations → selects one to check departures when away from their usual spot.
 
-**Статус:** ✅ `deleteSavedStation`.
+- [ ] Location requested; access denied handled gracefully
+- [ ] List of nearby stations with distance
+- [ ] Filter menu: Line / Platform / Show / Save as Preset / (Show without filters)
+- [ ] `▶️ Show` → preview → closing returns to the menu (adjust filters and show again)
+- [ ] `💾 Save as Preset` → pick colour → name → saves the station as a preset
+- [ ] `Cancel` → exits when done
+- [ ] `Show without filters` previews everything but does not clear configured defaults
 
----
-
-## 9. Настройки
-
-- [ ] Типы транспорта (S/U-Bahn, Bus, Tram и т.д.) — тоггл
-- [ ] Дефолтные фильтры для Find Nearest
-- [ ] Subtract Minutes + индикатор `-N`
-
-**Статус:** ✅ `showSettings`.
+**Status:** ✅ `findNearestStation` (looped menu + optional save). The feature goal is "quick look at what's nearby"; saving is optional with no nagging prompts.
 
 ---
 
-## Edge cases
+## 6. Checking Departures with Delays
 
-- [x] Станция не найдена → красивый экран ошибки (иконка + подсказка)
-- [x] Нет отправлений (слишком строгие фильтры) → красивый экран с подсказкой убрать фильтры
-- [x] Нет интернета → алерт о сетевой ошибке
-- [x] Несуществующее имя пресета в параметре виджета → экран «Preset not found» с именем и подсказкой
+**Scenario:** the next departure is delayed; the delay should be shown clearly without losing readability of the time, line, and destination.
+
+- [ ] Planned departure time shown in white
+- [ ] Delayed minutes shown in red
+- [ ] Line, destination, and platform remain readable
+
+**Status:** ✅ Implemented in `createWidget` (`delayInMinutes > 0` branch).
+
+---
+
+## 7. Editing an Existing Preset
+
+**Scenario:** changes station name, platform filter, or line filter without recreating the configuration from scratch.
+
+- [ ] `✏️ Edit Preset`: select a preset
+- [ ] Edit individual fields (station, lines, platform, gradient, name)
+- [ ] Duplicate name protection
+- [ ] Preview shown after saving
+
+**Status:** ✅ `editSavedStation`.
+
+---
+
+## 8. Deleting a Preset
+
+- [ ] `🗑️ Delete Preset`: select → confirm → file removed
+
+**Status:** ✅ `deleteSavedStation`.
+
+---
+
+## 9. Settings
+
+- [ ] Transport types (S-Bahn, U-Bahn, Bus, Tram, etc.) — toggle
+- [ ] Default filters for Find Nearest
+- [ ] Subtract Minutes + `-N` indicator
+
+**Status:** ✅ `showSettings`.
+
+---
+
+## Edge Cases
+
+- [x] Station not found → styled error screen (icon + station name)
+- [x] No departures (filters too strict) → styled error screen with station and active filters in the title
+- [x] No internet → alert in the wizard flows
+- [x] Unknown preset name in widget parameter → "Preset not found" screen with the preset name
