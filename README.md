@@ -30,31 +30,48 @@ Color options:
 
 ### In-App Menu
 
-When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with two options:
+When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with these options:
 
-#### 🔍 Find Station
-Quick preview wizard with prefilled defaults from your configuration:
-
-1. **Station** — Search and select (defaults from `DEFAULT_WIDGET_PARAMETERS`)
-2. **Platform** (optional) — Filter by platform number (prefilled from defaults)
-3. **Lines** (optional) — Filter by specific lines (prefilled from defaults)
-4. Shows live preview with your default color gradient
-
-Perfect for quick lookups or testing different stations.
+| Action | Description |
+|--------|-------------|
+| ➕ Create Saved Station | Save a station configuration to a file for use as a widget |
+| 🔎 Find Nearest Station | Show departures for the nearest station using GPS |
+| 👀 View Saved Station | Preview a saved station as a widget |
+| ✏️ Edit Saved Station | Edit a saved station's configuration |
+| 🗑️ Delete Saved Station | Delete a saved station file |
+| ℹ️ How to Add Widget | Step-by-step widget setup instructions |
+| ⚙️ Settings | Configure transport types, timing, and defaults |
 
 #### ➕ Create Saved Station
-A step-by-step wizard to create a reusable saved stations:
+A wizard to create a reusable station configuration:
 
-1. **Saved Station name** — A short name like "Home" or "Work"
-2. **Station** — Search and select from MVG stations
+1. **Station** — Search and select from MVG stations
+2. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
 3. **Platform** (optional) — Filter by platform number
-4. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
-5. **Color** — Choose a background gradient
+4. **Color** — Choose a background gradient
+5. **Saved Station name** — A short name like "Home" or "Work"
 
 After saving:
 - The saved station name is **copied to your clipboard**
-- You'll see instructions on how to add the widget to your home screen
-- The saved station is saved to `Munich Commute/<StationName>.txt` inside the Scriptable iCloud folder
+- A "Add to Home Screen" screen appears with setup instructions
+- The station is saved to `Munich Commute/<StationName>.txt` inside the Scriptable iCloud folder
+
+#### 🔎 Find Nearest Station
+Shows live departures for a nearby station without saving anything:
+
+1. Your location is used to find stations within range
+2. Select a station from the list
+3. A filter menu appears — set Line and/or Platform filters, or tap **Show** immediately
+   - If defaults are configured in Settings, a **Show without filters** option also appears
+4. The widget preview opens with live departures
+
+#### ⚙️ Settings
+Accessible from the main menu. Changes save immediately — no Save button needed.
+
+- **Transport Types** — Toggle S-Bahn, U-Bahn, Bus, Regional Bus, Tram, Train on/off
+- **Station Defaults** — Pre-filled Line and Platform filters for Find Nearest Station
+- **Subtract Minutes** — Subtract N minutes from all departure times (useful for walk time)
+- **Show Subtracted Minutes** — Show the "-N" offset indicator in the widget header
 
 ### Adding the Widget to Home Screen
 
@@ -62,8 +79,9 @@ After saving:
 2. Long-press anywhere → tap "+"
 3. Search "Scriptable" → Add widget (any size)
 4. Long-press the widget → "Edit Widget"
-5. Select "Munich Commute Widget" as the Script
-6. Paste your saved station name (e.g., "Home") as the Parameter
+5. Set Script to "Munich Commute Widget"
+6. Set When Interacting to "Run Script"
+7. Paste your saved station name (e.g., "Home") as the Parameter
 
 ### Configuration Parameters
 
@@ -94,7 +112,7 @@ Show only specific lines (comma-separated).
 gradient:blue
 ```
 Choose from available gradients:
-- `grey` (default)
+- `black` (default)
 - `red`
 - `blue`
 - `green`
@@ -142,7 +160,7 @@ Hauptbahnhof
 Ostbahnhof;platform:2;lines:S1,S2;gradient:green
 ```
 
-#### Simple station widget
+#### Station with gradient
 ```
 Sendlinger Tor;gradient:purple
 ```
