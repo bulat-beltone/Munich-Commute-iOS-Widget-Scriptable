@@ -792,25 +792,49 @@ async function findNearestStation() {
     const selectedDistance = nearestStations[selectedIndex].distanceInMeters;
     console.log(`[INFO] Selected station: ${nearestStation} (${selectedDistance}m away)`);
 
-    // Lines selection (optional) — pre-filled from Settings
-    const lines = await askText({
-        title: "Lines (optional)",
-        message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
-        placeholder: DEFAULT_STATION_LINES || "S1, S2, U3",
-        defaultValue: DEFAULT_STATION_LINES,
-        isOptional: true
-    });
-    if (lines === null) return null;
+    const distanceLabel = selectedDistance >= 1000
+        ? `${(selectedDistance / 1000).toFixed(1)} km away`
+        : `${selectedDistance} m away`;
 
-    // Platform selection (optional) — pre-filled from Settings
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: `Nearest station: ${nearestStation}\n\nFilter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.`,
-        placeholder: DEFAULT_STATION_PLATFORM || "1, 2",
-        defaultValue: DEFAULT_STATION_PLATFORM,
-        isOptional: true
-    });
-    if (platform === null) return null;
+    let lines = DEFAULT_STATION_LINES;
+    let platform = DEFAULT_STATION_PLATFORM;
+
+    while (true) {
+        const filterMenu = new Alert();
+        filterMenu.title = nearestStation;
+        filterMenu.message = `${distanceLabel}. Set filters or tap Show.`;
+        filterMenu.addAction(`🚆 Line: ${lines || "all"}`);
+        filterMenu.addAction(`🛤 Platform: ${platform || "all"}`);
+        filterMenu.addAction("▶️ Show");
+        filterMenu.addCancelAction("Cancel");
+
+        const filterChoice = await filterMenu.presentSheet();
+        if (filterChoice === -1) return null;
+
+        if (filterChoice === 0) {
+            const newLines = await askText({
+                title: "Line filter (optional)",
+                message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
+                placeholder: "S1, S2, U3",
+                defaultValue: lines,
+                isOptional: true
+            });
+            if (newLines === null) return null;
+            lines = newLines;
+        } else if (filterChoice === 1) {
+            const newPlatform = await askText({
+                title: "Platform filter (optional)",
+                message: "Filter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.",
+                placeholder: "1, 2",
+                defaultValue: platform,
+                isOptional: true
+            });
+            if (newPlatform === null) return null;
+            platform = newPlatform;
+        } else {
+            break;
+        }
+    }
 
     return {
         station: nearestStation,
