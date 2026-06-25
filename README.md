@@ -24,6 +24,8 @@ Color options:
 2. Copy the contents of `Munich Commute Widget.js` to a new script in Scriptable
 3. Add the script as a widget to your home screen
 
+> **File location:** Scriptable scripts are usually stored in iCloud Drive → **Scriptable** folder (`iCloud Drive/Scriptable/`). You can open this folder in the Files app to copy the script directly.
+
 ## Usage
 
 ### In-App Menu
@@ -52,7 +54,7 @@ A step-by-step wizard to create a reusable saved stations:
 After saving:
 - The saved station name is **copied to your clipboard**
 - You'll see instructions on how to add the widget to your home screen
-- The saved station is saved to `Munich Commute. Saved Stations/<StationName>.txt`
+- The saved station is saved to `Munich Commute/<StationName>.txt` inside the Scriptable iCloud folder
 
 ### Adding the Widget to Home Screen
 
@@ -107,16 +109,26 @@ Example widget parameter:
 Home
 ```
 
+All widget data is stored in a single folder inside the Scriptable iCloud folder:
+
+```
+iCloud Drive/Scriptable/Munich Commute/
+├── Home.txt                      ← saved station
+├── Work.txt                      ← saved station
+├── Settings.json                 ← transport types, subtract minutes
+└── Find Nearest Defaults.txt     ← pre-filled line/platform filters
+```
+
 Saved station file locations (searched in order):
-- `Munich Commute. Saved Stations/Home.txt`
-- `Home.txt` (fallback)
+- `Munich Commute/Home.txt`
+- `Home.txt` (fallback for older setups)
 
 Example file content:
 ```
-station:München-Langwied;platform:1;gradient:purple
+station: München-Langwied; platform: 1; gradient: purple
 ```
 
-Note: `background` is still supported for backward compatibility.
+Note: `background` is still supported as an alias for `gradient`.
 
 ### Example Configurations
 
