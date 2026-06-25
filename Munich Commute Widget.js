@@ -77,11 +77,11 @@ const MAIN_MENU_ACTION = Object.freeze({
 });
 
 const MAIN_MENU_ACTIONS = Object.freeze([
-    { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Saved Station" },
+    { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Preset" },
     { id: MAIN_MENU_ACTION.FIND_NEAREST_STATION, label: "🔎 Find Nearest Station" },
-    { id: MAIN_MENU_ACTION.VIEW_SAVED_STATION, label: "👀 View Saved Station" },
-    { id: MAIN_MENU_ACTION.EDIT_SAVED_STATION, label: "✏️ Edit Saved Station" },
-    { id: MAIN_MENU_ACTION.DELETE_SAVED_STATION, label: "🗑️ Delete Saved Station" },
+    { id: MAIN_MENU_ACTION.VIEW_SAVED_STATION, label: "👀 View Preset" },
+    { id: MAIN_MENU_ACTION.EDIT_SAVED_STATION, label: "✏️ Edit Preset" },
+    { id: MAIN_MENU_ACTION.DELETE_SAVED_STATION, label: "🗑️ Delete Preset" },
     { id: MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET, label: "ℹ️ How to Add Widget" },
     { id: MAIN_MENU_ACTION.SETTINGS, label: "⚙️ Settings" },
 ]);
@@ -175,6 +175,10 @@ const LINE_COLORS = {
 // PARAMETER PARSING
 // ============================================================================
 
+// Set when a preset name was provided as the widget parameter but no matching
+// file was found, so the widget can show an error instead of a silent fallback.
+let missingPresetName = null;
+
 function resolveWidgetParameter(rawParameter) {
     const trimmedParameter = (rawParameter || "").trim();
     if (!trimmedParameter) return DEFAULT_WIDGET_PARAMETERS;
@@ -206,7 +210,8 @@ function resolveWidgetParameter(rawParameter) {
         return DEFAULT_WIDGET_PARAMETERS;
     }
 
-    console.log(`[WARN] No widget parameter profile found for '${trimmedParameter}'. Falling back to defaults.`);
+    console.log(`[WARN] No widget parameter profile found for '${trimmedParameter}'.`);
+    missingPresetName = trimmedParameter;
     return DEFAULT_WIDGET_PARAMETERS;
 }
 
@@ -389,7 +394,7 @@ async function askGradientOrKeepCurrent(defaultGradient = "black") {
 function getWidgetSetupInstructions() {
     return `Open Scriptable app
     Run "Munich Commute Widget"
-    Tap ➕ Create Saved Station
+    Tap ➕ Create Preset
     
     Then add Scriptable widget to Home Screen:
     
@@ -401,11 +406,11 @@ function getWidgetSetupInstructions() {
 
     Parameter:
     Just paste
-    Saved station name will be copied to clipboard`;
+    Preset name will be copied to clipboard`;
 }
 
 function getPostCreateInstructions(parameterName) {
-    return `Station "${parameterName}" saved!
+    return `Preset "${parameterName}" saved!
 
     Now add Scriptable widget to Home Screen:
 
@@ -417,7 +422,7 @@ function getPostCreateInstructions(parameterName) {
 
     Parameter:
     Just paste
-    Saved station name already copied to clipboard`;
+    Preset name already copied to clipboard`;
 }
 
 async function searchAndSelectStation(typedStation) {
@@ -528,7 +533,55 @@ async function getDepartures(globalId) {
 // WIDGET CREATION & RENDERING
 // ============================================================================
 
+function createMessageWidget(title, symbolName = "exclamationmark.triangle") {
+    const widget = new ListWidget();
+    widget.useDefaultPadding();
+
+    const palette = CONFIG.gradients[userGradient] || CONFIG.gradients.black;
+    const gradient = new LinearGradient();
+    gradient.colors = [new Color(palette.top), new Color(palette.bottom)];
+    gradient.locations = [0.0, 1.0];
+    widget.backgroundGradient = gradient;
+
+    widget.addSpacer();
+
+    const iconRow = widget.addStack();
+    iconRow.layoutHorizontally();
+    iconRow.addSpacer();
+    const symbol = SFSymbol.named(symbolName);
+    symbol.applyFont(Font.boldSystemFont(28));
+    const icon = iconRow.addImage(symbol.image);
+    icon.imageSize = new Size(34, 34);
+    icon.tintColor = Color.white();
+    iconRow.addSpacer();
+
+    widget.addSpacer(10);
+
+    const titleRow = widget.addStack();
+    titleRow.layoutHorizontally();
+    titleRow.addSpacer();
+    const titleText = titleRow.addText(title);
+    titleText.font = Font.semiboldSystemFont(16);
+    titleText.textColor = Color.white();
+    titleText.centerAlignText();
+    titleText.lineLimit = 2;
+    titleText.minimumScaleFactor = 0.7;
+    titleRow.addSpacer();
+
+    widget.addSpacer();
+
+    return widget;
+}
+
 async function createWidget() {
+    if (missingPresetName) {
+        console.log(`[ERROR]   - Preset not found for widget parameter: '${missingPresetName}'`);
+        return createMessageWidget(
+            `"${missingPresetName}" preset not found`,
+            "questionmark.folder"
+        );
+    }
+
     console.log('[INFO] Step 2: Determining widget and device info...');
     const widgetSize = config.widgetFamily || 'large';
     console.log(`[INFO]   - Widget family: ${widgetSize}`);
@@ -539,10 +592,12 @@ async function createWidget() {
     console.log('[INFO] Step 3: Fetching station ID...');
     const stationResult = await getStationId(userStation);
     if (!stationResult) {
-        let errorWidget = new ListWidget();
-        errorWidget.addText("Station not found");
         console.log(`[ERROR]   - Station not found for name: ${userStation}`);
-        return errorWidget;
+        const searchedStation = userStation.replace(/^München-/, '');
+        return createMessageWidget(
+            `"${searchedStation}" not found`,
+            "exclamationmark.magnifyingglass"
+        );
     }
     const globalId = stationResult.globalId;
     userStation = stationResult.name; // Use the actual station name from the API
@@ -565,12 +620,15 @@ async function createWidget() {
     console.log(`[INFO]   - Departures after filter: ${departures.length}`);
 
     if (departures.length === 0) {
-        const widget = new ListWidget();
-        widget.addText(userStation.replace(/^München-/, ''));
-        widget.addSpacer(4);
-        widget.addText("No departures found");
         console.log(`[WARN]   - No departures found for station: ${userStation}`);
-        return widget;
+        const stationLabel = userStation.replace(/^München-/, '');
+        const filterBits = [];
+        if (userLines) filterBits.push(userLines.join(", "));
+        if (userPlatforms) filterBits.push(`Pl. ${userPlatforms.join(", ")}`);
+        const noDeparturesTitle = filterBits.length
+            ? `No ${filterBits.join(" · ")} at ${stationLabel}`
+            : `No departures at ${stationLabel}`;
+        return createMessageWidget(noDeparturesTitle, "tram.fill");
     }
 
     console.log('[INFO] Step 6: Building widget UI...');
@@ -831,20 +889,42 @@ async function findNearestStation() {
     let platform = DEFAULT_STATION_PLATFORM;
     const hasDefaults = !!(DEFAULT_STATION_LINES || DEFAULT_STATION_PLATFORM);
 
+    const presentPreview = async (overrideLines, overridePlatform) => {
+        userStation = nearestStation;
+        userLines = parseLineFilter(overrideLines === undefined ? lines : overrideLines);
+        userPlatforms = parsePlatformFilter(overridePlatform === undefined ? platform : overridePlatform);
+        userGradient = "black";
+
+        const previousWidgetFamily = config.widgetFamily;
+        config.widgetFamily = "large";
+        try {
+            const widget = await createWidget();
+            await widget.presentLarge();
+        } finally {
+            config.widgetFamily = previousWidgetFamily;
+        }
+    };
+
     while (true) {
+        const actions = [
+            { id: "line", label: `🚆 Line: ${lines || "all"}` },
+            { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
+            { id: "save", label: "💾 Save as Preset" },
+            { id: "show", label: "▶️ Show" }
+        ];
+        if (hasDefaults) actions.push({ id: "showNoFilters", label: "▶️ Show without filters" });
+
         const filterMenu = new Alert();
         filterMenu.title = nearestStation;
-        filterMenu.message = `${distanceLabel}. Set filters or tap Show.`;
-        filterMenu.addAction(`🚆 Line: ${lines || "all"}`);
-        filterMenu.addAction(`🛤 Platform: ${platform || "all"}`);
-        filterMenu.addAction("▶️ Show");
-        if (hasDefaults) filterMenu.addAction("▶️ Show without filters");
+        filterMenu.message = `${distanceLabel}. Set filters, show departures, or save as a preset.\nTap Cancel when done.`;
+        actions.forEach(a => filterMenu.addAction(a.label));
         filterMenu.addCancelAction("Cancel");
 
         const filterChoice = await filterMenu.presentSheet();
         if (filterChoice === -1) return null;
+        const action = actions[filterChoice].id;
 
-        if (filterChoice === 0) {
+        if (action === "line") {
             const newLines = await askText({
                 title: "Line filter (optional)",
                 message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
@@ -852,9 +932,8 @@ async function findNearestStation() {
                 defaultValue: lines,
                 isOptional: true
             });
-            if (newLines === null) return null;
-            lines = newLines;
-        } else if (filterChoice === 1) {
+            if (newLines !== null) lines = newLines;
+        } else if (action === "platform") {
             const newPlatform = await askText({
                 title: "Platform filter (optional)",
                 message: "Filter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.",
@@ -862,23 +941,30 @@ async function findNearestStation() {
                 defaultValue: platform,
                 isOptional: true
             });
-            if (newPlatform === null) return null;
-            platform = newPlatform;
-        } else if (filterChoice === 2) {
-            break;
-        } else {
-            lines = "";
-            platform = "";
-            break;
+            if (newPlatform !== null) platform = newPlatform;
+        } else if (action === "show") {
+            await presentPreview();
+        } else if (action === "save") {
+            const gradient = await askGradient();
+            if (gradient === null) continue; // Colour prompt cancelled — stay in the menu.
+            const savedName = await persistPreset({
+                station: nearestStation,
+                lines,
+                platform,
+                gradient,
+                suggestedName: nearestStation
+            });
+            if (savedName) {
+                console.log(`[INFO]   - Saved preset from Find Nearest: '${savedName}'`);
+                await showPostCreateInstructions(savedName);
+                return null;
+            }
+            // Name prompt cancelled — stay in the menu.
+        } else if (action === "showNoFilters") {
+            // Preview without filters, but keep the configured defaults for next time.
+            await presentPreview("", "");
         }
     }
-
-    return {
-        station: nearestStation,
-        platform: platform,
-        lines: lines,
-        gradient: "black"
-    };
 }
 
 async function promptForStationSelection() {
@@ -957,6 +1043,39 @@ async function promptForStationSelection() {
     };
 }
 
+async function persistPreset({ station, lines, platform, gradient, suggestedName }) {
+    const profileNameInput = await askText({
+        title: "Preset name",
+        message: "Give this preset a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
+        placeholder: suggestedName || station,
+        defaultValue: suggestedName || station
+    });
+    if (profileNameInput === null) return null;
+
+    const profileName = sanitizeProfileName(profileNameInput);
+    if (!profileName) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Invalid preset name";
+        errorAlert.message = "Please use at least one valid character.";
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
+
+    const parameterParts = [`station: ${station}`];
+    if (lines) parameterParts.push(`lines: ${lines}`);
+    if (platform) parameterParts.push(`platform: ${platform}`);
+    parameterParts.push(`gradient: ${gradient || "black"}`);
+
+    const fileManager = FileManager.iCloud();
+    const profileDirectory = ensureAppDirectory();
+    const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
+    fileManager.writeString(profilePath, parameterParts.join("; "));
+
+    Pasteboard.copy(profileName);
+    return profileName;
+}
+
 async function createSavedStation() {
     const stationInput = await askText({
         title: "Station",
@@ -989,47 +1108,8 @@ async function createSavedStation() {
     const gradient = await askGradient();
     if (gradient === null) return null;
 
-    const profileNameInput = await askText({
-        title: "Saved station name",
-        message: "Give this station a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
-        placeholder: station,
-        defaultValue: station
-    });
-
-    if (profileNameInput === null) return null;
-
-    const profileName = sanitizeProfileName(profileNameInput);
-    if (!profileName) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Invalid profile name";
-        errorAlert.message = "Please use at least one valid character.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
-        return null;
-    }
-
-    // Build the parameter string
-    const parameterParts = [`station: ${station}`];
-    if (lines) parameterParts.push(`lines: ${lines}`);
-    if (platform) parameterParts.push(`platform: ${platform}`);
-    parameterParts.push(`gradient: ${gradient}`);
-
-    const content = parameterParts.join("; ");
-
-    // Save to file
-    const fileManager = FileManager.iCloud();
-    const documentsDirectory = fileManager.documentsDirectory();
-    const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
-
-    if (!fileManager.fileExists(profileDirectory)) {
-        fileManager.createDirectory(profileDirectory, true);
-    }
-
-    const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
-    fileManager.writeString(profilePath, content);
-
-    // Copy profile name to clipboard
-    Pasteboard.copy(profileName);
+    const profileName = await persistPreset({ station, lines, platform, gradient, suggestedName: station });
+    if (profileName === null) return null;
 
     // Show widget preview directly
     userStation = station;
@@ -1056,8 +1136,8 @@ async function viewSavedStation() {
 
     if (!fileManager.fileExists(profileDirectory)) {
         const errorAlert = new Alert();
-        errorAlert.title = "No Saved Stations";
-        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.title = "No Presets";
+        errorAlert.message = "You haven't created any presets yet.";
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return false;
@@ -1069,16 +1149,16 @@ async function viewSavedStation() {
 
     if (files.length === 0) {
         const errorAlert = new Alert();
-        errorAlert.title = "No Saved Stations";
-        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.title = "No Presets";
+        errorAlert.message = "You haven't created any presets yet.";
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return false;
     }
 
     const selectAlert = new Alert();
-    selectAlert.title = "View Saved Station";
-    selectAlert.message = "Select a station to open:";
+    selectAlert.title = "View Preset";
+    selectAlert.message = "Select a preset to open:";
     files.forEach(f => selectAlert.addAction(f));
     selectAlert.addCancelAction("Cancel");
 
@@ -1147,8 +1227,8 @@ async function editSavedStation() {
 
     if (!fileManager.fileExists(profileDirectory)) {
         const errorAlert = new Alert();
-        errorAlert.title = "No Saved Stations";
-        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.title = "No Presets";
+        errorAlert.message = "You haven't created any presets yet.";
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return null;
@@ -1160,16 +1240,16 @@ async function editSavedStation() {
 
     if (files.length === 0) {
         const errorAlert = new Alert();
-        errorAlert.title = "No Saved Stations";
-        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.title = "No Presets";
+        errorAlert.message = "You haven't created any presets yet.";
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return null;
     }
 
     const selectAlert = new Alert();
-    selectAlert.title = "Edit Saved Station";
-    selectAlert.message = "Select a station to edit:";
+    selectAlert.title = "Edit Preset";
+    selectAlert.message = "Select a preset to edit:";
     files.forEach(f => selectAlert.addAction(f));
     selectAlert.addCancelAction("Cancel");
 
@@ -1257,7 +1337,7 @@ async function editSavedStation() {
             gradient = newGradient;
         } else if (fieldChoice === 4) {
             const nameInput = await askText({
-                title: "Saved station name",
+                title: "Preset name",
                 message: "Change the name or press Continue to keep it.",
                 placeholder: profileName,
                 defaultValue: profileName
@@ -1273,7 +1353,7 @@ async function editSavedStation() {
     if (profileName !== originalProfileName && fileManager.fileExists(updatedProfilePath)) {
         const errorAlert = new Alert();
         errorAlert.title = "Name already exists";
-        errorAlert.message = `A saved station named "${profileName}" already exists.`;
+        errorAlert.message = `A preset named "${profileName}" already exists.`;
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return null;
@@ -1315,8 +1395,8 @@ async function deleteSavedStation() {
 
     if (!fileManager.fileExists(profileDirectory)) {
         const errorAlert = new Alert();
-        errorAlert.title = "No Saved Stations";
-        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.title = "No Presets";
+        errorAlert.message = "You haven't created any presets yet.";
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return false;
@@ -1328,16 +1408,16 @@ async function deleteSavedStation() {
 
     if (files.length === 0) {
         const errorAlert = new Alert();
-        errorAlert.title = "No Saved Stations";
-        errorAlert.message = "You haven't created any saved stations yet.";
+        errorAlert.title = "No Presets";
+        errorAlert.message = "You haven't created any presets yet.";
         errorAlert.addAction("OK");
         await errorAlert.presentAlert();
         return false;
     }
 
     const selectAlert = new Alert();
-    selectAlert.title = "Delete Saved Station";
-    selectAlert.message = "Select a station to delete:";
+    selectAlert.title = "Delete Preset";
+    selectAlert.message = "Select a preset to delete:";
     files.forEach(f => selectAlert.addAction(f));
     selectAlert.addCancelAction("Cancel");
 
@@ -1347,7 +1427,7 @@ async function deleteSavedStation() {
     const profileName = files[selectedIndex];
 
     const confirmAlert = new Alert();
-    confirmAlert.title = "Delete Station?";
+    confirmAlert.title = "Delete Preset?";
     confirmAlert.message = `Are you sure you want to delete "${profileName}"? This cannot be undone.`;
     confirmAlert.addDestructiveAction("Delete");
     confirmAlert.addCancelAction("Cancel");
@@ -1629,20 +1709,10 @@ async function main() {
             }
             return;
         } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_STATION) {
-            // Find Nearest Station - wizard with geolocation
-            const config = await findNearestStation();
-            if (config) {
-                userStation = config.station;
-                userPlatforms = parsePlatformFilter(config.platform);
-                userLines = parseLineFilter(config.lines);
-                if (config.gradient && CONFIG.gradients[config.gradient]) {
-                    userGradient = config.gradient;
-                }
-                console.log(`[INFO]   - Station configured from nearest station: '${userStation}'`);
-            } else {
-                console.log('[INFO]   - User cancelled nearest station selection.');
-                return;
-            }
+            // Find Nearest Station - wizard with geolocation.
+            // Handles its own preview loop and optional save, so nothing to render afterwards.
+            await findNearestStation();
+            return;
         } else if (menuAction === MAIN_MENU_ACTION.SETTINGS) {
             await showSettings();
             return;

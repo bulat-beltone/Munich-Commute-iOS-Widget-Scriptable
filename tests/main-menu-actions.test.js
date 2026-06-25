@@ -113,7 +113,7 @@ globalThis.__testExports = {
 test("main menu maps the visible View action to the view action id", () => {
     const { MAIN_MENU_ACTIONS, MAIN_MENU_ACTION, getMainMenuActionForIndex } = loadWidgetExports();
 
-    const viewIndex = MAIN_MENU_ACTIONS.findIndex(action => action.label.includes("View Saved Station"));
+    const viewIndex = MAIN_MENU_ACTIONS.findIndex(action => action.label.includes("View Preset"));
 
     assert.notEqual(viewIndex, -1);
     assert.equal(getMainMenuActionForIndex(viewIndex), MAIN_MENU_ACTION.VIEW_SAVED_STATION);
@@ -122,7 +122,7 @@ test("main menu maps the visible View action to the view action id", () => {
 test("main menu maps the visible Edit action to the edit action id", () => {
     const { MAIN_MENU_ACTIONS, MAIN_MENU_ACTION, getMainMenuActionForIndex } = loadWidgetExports();
 
-    const editIndex = MAIN_MENU_ACTIONS.findIndex(action => action.label.includes("Edit Saved Station"));
+    const editIndex = MAIN_MENU_ACTIONS.findIndex(action => action.label.includes("Edit Preset"));
 
     assert.notEqual(editIndex, -1);
     assert.equal(getMainMenuActionForIndex(editIndex), MAIN_MENU_ACTION.EDIT_SAVED_STATION);
