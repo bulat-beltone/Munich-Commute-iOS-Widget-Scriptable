@@ -53,9 +53,9 @@ const CONFIG = {
 };
 
 // Profile directory for saved stations
-const PROFILE_DIRECTORY_NAME = "Munich Commute. Saved Stations";
-const SETTINGS_FILE_NAME = "Munich Commute. Settings.json";
-const NEAREST_DEFAULTS_FILE_NAME = "Munich Commute. Find Nearest Defaults.txt";
+const PROFILE_DIRECTORY_NAME = "Munich Commute";
+const SETTINGS_FILE_NAME = "Settings.json";
+const NEAREST_DEFAULTS_FILE_NAME = "Find Nearest Defaults.txt";
 const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
@@ -1034,7 +1034,7 @@ async function viewSavedStation() {
     }
 
     const files = fileManager.listContents(profileDirectory)
-        .filter(f => f.endsWith(".txt"))
+        .filter(f => f.endsWith(".txt") && f !== NEAREST_DEFAULTS_FILE_NAME)
         .map(f => f.replace(/\.txt$/, ""));
 
     if (files.length === 0) {
@@ -1125,7 +1125,7 @@ async function editSavedStation() {
     }
 
     const files = fileManager.listContents(profileDirectory)
-        .filter(f => f.endsWith(".txt"))
+        .filter(f => f.endsWith(".txt") && f !== NEAREST_DEFAULTS_FILE_NAME)
         .map(f => f.replace(/\.txt$/, ""));
 
     if (files.length === 0) {
@@ -1293,7 +1293,7 @@ async function deleteSavedStation() {
     }
 
     const files = fileManager.listContents(profileDirectory)
-        .filter(f => f.endsWith(".txt"))
+        .filter(f => f.endsWith(".txt") && f !== NEAREST_DEFAULTS_FILE_NAME)
         .map(f => f.replace(/\.txt$/, ""));
 
     if (files.length === 0) {
@@ -1336,9 +1336,21 @@ async function deleteSavedStation() {
     return true;
 }
 
+function getAppDirectory() {
+    const fileManager = FileManager.iCloud();
+    return fileManager.joinPath(fileManager.documentsDirectory(), PROFILE_DIRECTORY_NAME);
+}
+
+function ensureAppDirectory() {
+    const fileManager = FileManager.iCloud();
+    const dir = getAppDirectory();
+    if (!fileManager.fileExists(dir)) fileManager.createDirectory(dir, true);
+    return dir;
+}
+
 function loadSettings() {
     const fileManager = FileManager.iCloud();
-    const settingsPath = fileManager.joinPath(fileManager.documentsDirectory(), SETTINGS_FILE_NAME);
+    const settingsPath = fileManager.joinPath(getAppDirectory(), SETTINGS_FILE_NAME);
     if (!fileManager.fileExists(settingsPath)) return;
     try {
         const saved = JSON.parse(fileManager.readString(settingsPath));
@@ -1352,7 +1364,7 @@ function loadSettings() {
 
 function saveSettings() {
     const fileManager = FileManager.iCloud();
-    const settingsPath = fileManager.joinPath(fileManager.documentsDirectory(), SETTINGS_FILE_NAME);
+    const settingsPath = fileManager.joinPath(ensureAppDirectory(), SETTINGS_FILE_NAME);
     fileManager.writeString(settingsPath, JSON.stringify({
         transportTypes: { ...TRANSPORT_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
@@ -1362,7 +1374,7 @@ function saveSettings() {
 
 function loadNearestDefaults() {
     const fileManager = FileManager.iCloud();
-    const path = fileManager.joinPath(fileManager.documentsDirectory(), NEAREST_DEFAULTS_FILE_NAME);
+    const path = fileManager.joinPath(getAppDirectory(), NEAREST_DEFAULTS_FILE_NAME);
     if (!fileManager.fileExists(path)) return;
     try {
         fileManager.readString(path).split(";").forEach(param => {
@@ -1380,7 +1392,7 @@ function loadNearestDefaults() {
 
 function saveNearestDefaults() {
     const fileManager = FileManager.iCloud();
-    const path = fileManager.joinPath(fileManager.documentsDirectory(), NEAREST_DEFAULTS_FILE_NAME);
+    const path = fileManager.joinPath(ensureAppDirectory(), NEAREST_DEFAULTS_FILE_NAME);
     const parts = [];
     if (DEFAULT_STATION_LINES) parts.push(`lines: ${DEFAULT_STATION_LINES}`);
     if (DEFAULT_STATION_PLATFORM) parts.push(`platform: ${DEFAULT_STATION_PLATFORM}`);
