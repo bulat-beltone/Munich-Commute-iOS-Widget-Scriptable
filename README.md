@@ -34,27 +34,27 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 
 | Action | Description |
 |--------|-------------|
-| ➕ Create Saved Station | Save a station configuration to a file for use as a widget |
+| ➕ Create Preset | Save a station configuration to a file for use as a widget |
 | 🔎 Find Nearest Station | Show departures for the nearest station using GPS |
-| 👀 View Saved Station | Preview a saved station as a widget |
-| ✏️ Edit Saved Station | Edit a saved station's configuration |
-| 🗑️ Delete Saved Station | Delete a saved station file |
+| 👀 View Preset | Preview a preset as a widget |
+| ✏️ Edit Preset | Edit a preset's configuration |
+| 🗑️ Delete Preset | Delete a preset file |
 | ℹ️ How to Add Widget | Step-by-step widget setup instructions |
 | ⚙️ Settings | Configure transport types, timing, and defaults |
 
-#### ➕ Create Saved Station
+#### ➕ Create Preset
 A wizard to create a reusable station configuration:
 
 1. **Station** — Search and select from MVG stations
 2. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
 3. **Platform** (optional) — Filter by platform number
 4. **Color** — Choose a background gradient
-5. **Saved Station name** — A short name like "Home" or "Work"
+5. **Preset name** — A short name like "Home" or "Work"
 
 After saving:
-- The saved station name is **copied to your clipboard**
+- The preset name is **copied to your clipboard**
 - A "Add to Home Screen" screen appears with setup instructions
-- The station is saved to `Munich Commute/<StationName>.txt` inside the Scriptable iCloud folder
+- The preset is saved to `Munich Commute/<PresetName>.txt` inside the Scriptable iCloud folder
 
 #### 🔎 Find Nearest Station
 Shows live departures for a nearby station without saving anything:
@@ -81,7 +81,7 @@ Accessible from the main menu. Changes save immediately — no Save button neede
 4. Long-press the widget → "Edit Widget"
 5. Set Script to "Munich Commute Widget"
 6. Set When Interacting to "Run Script"
-7. Paste your saved station name (e.g., "Home") as the Parameter
+7. Paste your preset name (e.g., "Home") as the Parameter
 
 ### Configuration Parameters
 
@@ -119,8 +119,8 @@ Choose from available gradients:
 - `purple`
 - `teal`
 
-#### Saved Stations
-You can provide a **saved station name** as the widget parameter (without `:`). The script will then load the saved station.
+#### Presets
+You can provide a **preset name** as the widget parameter (without `:`). The script will then load the preset.
 
 Example widget parameter:
 ```
@@ -131,13 +131,13 @@ All widget data is stored in a single folder inside the Scriptable iCloud folder
 
 ```
 iCloud Drive/Scriptable/Munich Commute/
-├── Home.txt                      ← saved station
-├── Work.txt                      ← saved station
+├── Home.txt                      ← preset
+├── Work.txt                      ← preset
 ├── Settings.json                 ← transport types, subtract minutes
 └── Find Nearest Defaults.txt     ← pre-filled line/platform filters
 ```
 
-Saved station file locations (searched in order):
+Preset file locations (searched in order):
 - `Munich Commute/Home.txt`
 - `Home.txt` (fallback for older setups)
 
