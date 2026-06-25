@@ -1,4 +1,11 @@
 # Munich Commute Widget - Work Log
+## June 25, 2026
+
+### Action View triggers action Edit
+- **Issue:** Main menu action handling relied on raw numeric indexes, making it easy for visible menu actions like "View Saved Station" to drift into the wrong handler after menu reordering.
+- **Change:** Added a named `MAIN_MENU_ACTION` table and `MAIN_MENU_ACTIONS` menu definition. `showMainMenu()` now renders from that single table, and `main()` dispatches by action ID instead of hardcoded numbers.
+- **Test:** Added `tests/main-menu-actions.test.js` to load the Scriptable script with mocks and verify the visible View/Edit menu entries map to their correct action IDs.
+
 ## February 27, 2026
 
 ### Summary

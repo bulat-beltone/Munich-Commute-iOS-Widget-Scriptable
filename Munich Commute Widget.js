@@ -66,6 +66,26 @@ const AVAILABLE_GRADIENTS = [
     { name: "teal", label: "Teal", emoji: "🩵" }
 ];
 
+const MAIN_MENU_ACTION = Object.freeze({
+    CREATE_SAVED_STATION: "createSavedStation",
+    EDIT_SAVED_STATION: "editSavedStation",
+    DELETE_SAVED_STATION: "deleteSavedStation",
+    VIEW_SAVED_STATION: "viewSavedStation",
+    FIND_NEAREST_STATION: "findNearestStation",
+    SETTINGS: "settings",
+    HOW_TO_ADD_WIDGET: "howToAddWidget"
+});
+
+const MAIN_MENU_ACTIONS = Object.freeze([
+    { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Saved Station" },
+    { id: MAIN_MENU_ACTION.EDIT_SAVED_STATION, label: "✏️ Edit Saved Station" },
+    { id: MAIN_MENU_ACTION.DELETE_SAVED_STATION, label: "🗑️ Delete Saved Station" },
+    { id: MAIN_MENU_ACTION.VIEW_SAVED_STATION, label: "👀 View Saved Station" },
+    { id: MAIN_MENU_ACTION.FIND_NEAREST_STATION, label: "🔎 Find Nearest Station" },
+    { id: MAIN_MENU_ACTION.SETTINGS, label: "⚙️ Settings" },
+    { id: MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET, label: "ℹ️ How to Add Widget" }
+]);
+
 // Fixed secondary departure font (for departures 2-6)
 const DEPARTURE_SECONDARY_FONT = Font.boldSystemFont(16);
 
@@ -1396,17 +1416,16 @@ async function showMainMenu() {
     const menu = new Alert();
     menu.title = "Munich Commute Widget";
     menu.message = "What would you like to do?";
-    menu.addAction("➕ Create Saved Station");
-    menu.addAction("✏️ Edit Saved Station");
-    menu.addAction("🗑️ Delete Saved Station");
-    menu.addAction("👀 View Saved Station");
-    menu.addAction("🔎 Find Nearest Station");
-    menu.addAction("⚙️ Settings");
-    menu.addAction("ℹ️ How to Add Widget");
+    MAIN_MENU_ACTIONS.forEach(action => menu.addAction(action.label));
     menu.addCancelAction("Cancel");
 
     const selectedAction = await menu.presentSheet();
     return selectedAction;
+}
+
+function getMainMenuActionForIndex(selectedIndex) {
+    const selectedAction = MAIN_MENU_ACTIONS[selectedIndex];
+    return selectedAction ? selectedAction.id : null;
 }
 
 // ============================================================================
@@ -1428,33 +1447,34 @@ async function main() {
 
     if (!config.runsInWidget && !launchedFromWidgetTap) {
         const menuChoice = await showMainMenu();
+        const menuAction = getMainMenuActionForIndex(menuChoice);
 
-        if (menuChoice === 0) {
+        if (menuAction === MAIN_MENU_ACTION.CREATE_SAVED_STATION) {
             // Create Saved Station - wizard
             const savedProfile = await createSavedStation();
             if (savedProfile) {
                 console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
             }
             return;
-        } else if (menuChoice === 1) {
+        } else if (menuAction === MAIN_MENU_ACTION.EDIT_SAVED_STATION) {
             // Edit Saved Station
             const editedProfile = await editSavedStation();
             if (editedProfile) {
                 console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
             }
             return;
-        } else if (menuChoice === 2) {
+        } else if (menuAction === MAIN_MENU_ACTION.DELETE_SAVED_STATION) {
             // Delete Saved Station
             await deleteSavedStation();
             return;
-        } else if (menuChoice === 3) {
+        } else if (menuAction === MAIN_MENU_ACTION.VIEW_SAVED_STATION) {
             // View Saved Station - open selected profile in large size
             const viewedProfile = await viewSavedStation();
             if (viewedProfile) {
                 console.log('[INFO]   - Viewed saved station profile.');
             }
             return;
-        } else if (menuChoice === 4) {
+        } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_STATION) {
             // Find Nearest Station - wizard with geolocation
             const config = await findNearestStation();
             if (config) {
@@ -1469,10 +1489,10 @@ async function main() {
                 console.log('[INFO]   - User cancelled nearest station selection.');
                 return;
             }
-        } else if (menuChoice === 5) {
+        } else if (menuAction === MAIN_MENU_ACTION.SETTINGS) {
             await showSettings();
             return;
-        } else if (menuChoice === 6) {
+        } else if (menuAction === MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET) {
             await showHowToAddWidgetInstructions();
             return;
         } else {
