@@ -77,9 +77,9 @@ const MAIN_MENU_ACTION = Object.freeze({
 });
 
 const MAIN_MENU_ACTIONS = Object.freeze([
+    { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Saved Station" },
     { id: MAIN_MENU_ACTION.FIND_NEAREST_STATION, label: "🔎 Find Nearest Station" },
     { id: MAIN_MENU_ACTION.VIEW_SAVED_STATION, label: "👀 View Saved Station" },
-    { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Saved Station" },
     { id: MAIN_MENU_ACTION.EDIT_SAVED_STATION, label: "✏️ Edit Saved Station" },
     { id: MAIN_MENU_ACTION.DELETE_SAVED_STATION, label: "🗑️ Delete Saved Station" },
     { id: MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET, label: "ℹ️ How to Add Widget" },
@@ -387,11 +387,37 @@ async function askGradientOrKeepCurrent(defaultGradient = "black") {
 }
 
 function getWidgetSetupInstructions() {
-    return `1. Open Scriptable app\n2. Run "Munich Commute Widget"\n3. Tap ➕ Create Saved Station\n4. Follow the wizard\n\nThen add the widget:\n\nLong-press Home Screen → "+"\nSearch "Scriptable" → add widget\nLong-press widget → "Edit Widget"\n\nScript: "Munich Commute Widget"\nWhen Interacting: "Run Script"\nParameter: your saved station name`;
+    return `Open Scriptable app
+    Run "Munich Commute Widget"
+    Tap ➕ Create Saved Station
+    
+    Then add Scriptable widget to Home Screen:
+    
+    Script:
+    "Munich Commute Widget"
+    
+    When Interacting:
+    "Run Script"
+
+    Parameter:
+    Just paste
+    Saved station name will be copied to clipboard`;
 }
 
 function getPostCreateInstructions(parameterName) {
-    return `Station "${parameterName}" saved!\n\nNow add it to your Home Screen:\n\nLong-press Home Screen → "+"\nSearch "Scriptable" → add widget\nLong-press widget → "Edit Widget"\n\nScript: "Munich Commute Widget"\nWhen Interacting: "Run Script"\nParameter: "${parameterName}"\n(already copied to clipboard)`;
+    return `Station "${parameterName}" saved!
+
+    Now add Scriptable widget to Home Screen:
+
+    Script:
+    "Munich Commute Widget"
+
+    When Interacting:
+    "Run Script"
+
+    Parameter:
+    Just paste
+    Saved station name already copied to clipboard`;
 }
 
 async function searchAndSelectStation(typedStation) {
