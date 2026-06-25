@@ -55,7 +55,6 @@ const CONFIG = {
 // Profile directory for saved stations
 const PROFILE_DIRECTORY_NAME = "Munich Commute";
 const SETTINGS_FILE_NAME = "Settings.json";
-const NEAREST_DEFAULTS_FILE_NAME = "Find Nearest Defaults.txt";
 const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
@@ -1144,7 +1143,7 @@ async function viewSavedStation() {
     }
 
     const files = fileManager.listContents(profileDirectory)
-        .filter(f => f.endsWith(".txt") && f !== NEAREST_DEFAULTS_FILE_NAME)
+        .filter(f => f.endsWith(".txt"))
         .map(f => f.replace(/\.txt$/, ""));
 
     if (files.length === 0) {
@@ -1235,7 +1234,7 @@ async function editSavedStation() {
     }
 
     const files = fileManager.listContents(profileDirectory)
-        .filter(f => f.endsWith(".txt") && f !== NEAREST_DEFAULTS_FILE_NAME)
+        .filter(f => f.endsWith(".txt"))
         .map(f => f.replace(/\.txt$/, ""));
 
     if (files.length === 0) {
@@ -1403,7 +1402,7 @@ async function deleteSavedStation() {
     }
 
     const files = fileManager.listContents(profileDirectory)
-        .filter(f => f.endsWith(".txt") && f !== NEAREST_DEFAULTS_FILE_NAME)
+        .filter(f => f.endsWith(".txt"))
         .map(f => f.replace(/\.txt$/, ""));
 
     if (files.length === 0) {
@@ -1467,6 +1466,8 @@ function loadSettings() {
         if (saved.transportTypes) Object.assign(TRANSPORT_TYPES, saved.transportTypes);
         if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
         if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
+        if (typeof saved.defaultStationLines === "string") DEFAULT_STATION_LINES = saved.defaultStationLines;
+        if (typeof saved.defaultStationPlatform === "string") DEFAULT_STATION_PLATFORM = saved.defaultStationPlatform;
     } catch (e) {
         console.log(`[WARN] Failed to load settings: ${e}`);
     }
@@ -1478,40 +1479,12 @@ function saveSettings() {
     fileManager.writeString(settingsPath, JSON.stringify({
         transportTypes: { ...TRANSPORT_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
-        showSubtractMinutes: SHOW_SUBTRACT_MINUTES
+        showSubtractMinutes: SHOW_SUBTRACT_MINUTES,
+        defaultStationLines: DEFAULT_STATION_LINES,
+        defaultStationPlatform: DEFAULT_STATION_PLATFORM
     }, null, 2));
 }
 
-function loadNearestDefaults() {
-    const fileManager = FileManager.iCloud();
-    const path = fileManager.joinPath(getAppDirectory(), NEAREST_DEFAULTS_FILE_NAME);
-    if (!fileManager.fileExists(path)) return;
-    try {
-        fileManager.readString(path).split(";").forEach(param => {
-            const trimmed = param.trim();
-            if (!trimmed.includes(":")) return;
-            const [key, ...valueParts] = trimmed.split(":").map(p => p.trim());
-            const value = valueParts.join(":").trim();
-            if (key.toLowerCase() === "lines") DEFAULT_STATION_LINES = value;
-            else if (key.toLowerCase() === "platform") DEFAULT_STATION_PLATFORM = value;
-        });
-    } catch (e) {
-        console.log(`[WARN] Failed to load nearest defaults: ${e}`);
-    }
-}
-
-function saveNearestDefaults() {
-    const fileManager = FileManager.iCloud();
-    const path = fileManager.joinPath(ensureAppDirectory(), NEAREST_DEFAULTS_FILE_NAME);
-    const parts = [];
-    if (DEFAULT_STATION_LINES) parts.push(`lines: ${DEFAULT_STATION_LINES}`);
-    if (DEFAULT_STATION_PLATFORM) parts.push(`platform: ${DEFAULT_STATION_PLATFORM}`);
-    if (parts.length > 0) {
-        fileManager.writeString(path, parts.join("; "));
-    } else if (fileManager.fileExists(path)) {
-        fileManager.remove(path);
-    }
-}
 
 async function showSettingsTransportTypes() {
     while (true) {
@@ -1584,7 +1557,7 @@ async function showSettingsStationDefaults() {
             if (input === null) return;
             DEFAULT_STATION_PLATFORM = input;
         }
-        saveNearestDefaults();
+        saveSettings();
     }
 }
 
@@ -1667,7 +1640,6 @@ function getMainMenuActionForIndex(selectedIndex) {
 async function main() {
     console.log('[INFO] Munich Commute Widget script started');
     loadSettings();
-    loadNearestDefaults();
     console.log('[INFO] Step 1: Parsing parameters...');
     console.log(`[INFO]   - Station: '${userStation}'`);
     console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
