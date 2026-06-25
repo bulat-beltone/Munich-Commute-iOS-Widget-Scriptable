@@ -931,7 +931,8 @@ async function createSavedStation() {
     const profileNameInput = await askText({
         title: "Saved station name",
         message: "Give this station a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
-        placeholder: "Home"
+        placeholder: station,
+        defaultValue: station
     });
 
     if (profileNameInput === null) return null;
