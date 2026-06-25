@@ -348,7 +348,7 @@ async function askGradient(defaultGradient = "black") {
     AVAILABLE_GRADIENTS.forEach(g => {
         const displayLabel = `${g.emoji} ${g.label}`;
         if (g.name === defaultGradient) {
-            alert.addAction(`${displayLabel} (current)`);
+            alert.addAction(`${displayLabel} (default)`);
         } else {
             alert.addAction(displayLabel);
         }
