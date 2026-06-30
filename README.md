@@ -8,6 +8,7 @@ Works based on Scriptable app.
 - **Filtering** by transport types or platform
 - **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
 - **Real-time departures** using official MVV API
+- **Cancelled departures** remain visible but appear dimmed, with a gray line badge
 - **Customizable colors**
 
 Color options:
@@ -210,6 +211,7 @@ The script includes several customization options in the `CONFIG` object:
 
 This widget uses Munich's public transport API to fetch real-time departure data. The data includes:
 - Departure times with delay information
+- Cancellation status
 - Destination information
 - Line/route details
 - Transport type information

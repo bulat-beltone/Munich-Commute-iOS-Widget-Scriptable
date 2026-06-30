@@ -87,6 +87,9 @@ const MAIN_MENU_ACTIONS = Object.freeze([
 
 // Fixed secondary departure font (for departures 2-6)
 const DEPARTURE_SECONDARY_FONT = Font.boldSystemFont(16);
+const CANCELLED_DEPARTURE_LINE_COLOR = "#6E6E6E";
+const CANCELLED_DEPARTURE_LINE_TEXT_OPACITY = 0.65;
+const CANCELLED_DEPARTURE_TIME_OPACITY = 0.45;
 
 // ============================================================================
 // WIDGET SIZE CONFIGURATION
@@ -317,6 +320,22 @@ function getLineColor(transportType, label) {
         return LINE_COLORS[transportType][label] || "#FFFFFF";
     }
     return LINE_COLORS[transportType] || "#FFFFFF";
+}
+
+function getDepartureVisualState(departure) {
+    if (departure && departure.cancelled === true) {
+        return {
+            lineBackgroundColor: CANCELLED_DEPARTURE_LINE_COLOR,
+            lineTextOpacity: CANCELLED_DEPARTURE_LINE_TEXT_OPACITY,
+            timeTextOpacity: CANCELLED_DEPARTURE_TIME_OPACITY
+        };
+    }
+
+    return {
+        lineBackgroundColor: null,
+        lineTextOpacity: 1,
+        timeTextOpacity: 1
+    };
 }
 
 // ============================================================================
@@ -702,6 +721,7 @@ async function createWidget() {
         console.log(`[DEBUG] lineStack.size set to: width=${widgetConfig.lineBadgeSize.width}, height=${widgetConfig.lineBadgeSize.height}`);
         lineStack.centerAlignContent();
 
+        const departureVisualState = getDepartureVisualState(departures[i]);
         const lineName = lineStack.addText(departures[i].label);
         const lineColor = getLineColor(departures[i].transportType, departures[i].label);
 
@@ -711,7 +731,11 @@ async function createWidget() {
         const gradTopKey = label + "_gradient_top";
         const gradBottomKey = label + "_gradient_bottom";
         let usedGradient = false;
-        if (transportColors && transportColors[gradTopKey] && transportColors[gradBottomKey]) {
+        if (departureVisualState.lineBackgroundColor) {
+            lineStack.backgroundColor = new Color(departureVisualState.lineBackgroundColor);
+            lineStack.cornerRadius = 4;
+            lineName.textColor = Color.white();
+        } else if (transportColors && transportColors[gradTopKey] && transportColors[gradBottomKey]) {
             const topColor = transportColors[gradTopKey];
             const bottomColor = transportColors[gradBottomKey];
             let grad = new LinearGradient();
@@ -736,6 +760,7 @@ async function createWidget() {
         }
 
         lineName.font = widgetConfig.lineBadgeFont;
+        lineName.textOpacity = departureVisualState.lineTextOpacity;
         lineName.centerAlignText();
         lineName.minimumScaleFactor = 0.4;
 
@@ -763,6 +788,7 @@ async function createWidget() {
             const plannedTimeStr = formatDepartureTime(plannedDate);
             const plannedTimeText = timeRowStack.addText(plannedTimeStr);
             plannedTimeText.textColor = Color.white();
+            plannedTimeText.textOpacity = departureVisualState.timeTextOpacity;
             plannedTimeText.font = i === 0 ? primaryDepartureFont : DEPARTURE_SECONDARY_FONT;
             plannedTimeText.lineLimit = 1;
 
@@ -771,7 +797,8 @@ async function createWidget() {
             const delayedDate = new Date(adjustedTime);
             const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
             const colonMinutesText = timeRowStack.addText(':' + delayedMinutes);
-            colonMinutesText.textColor = new Color('#DB5C5C');
+            colonMinutesText.textColor = departures[i].cancelled ? Color.white() : new Color('#DB5C5C');
+            colonMinutesText.textOpacity = departureVisualState.timeTextOpacity;
             colonMinutesText.font = i === 0 ? primaryDepartureFont : DEPARTURE_SECONDARY_FONT;
             colonMinutesText.lineLimit = 1;
         } else {
@@ -781,6 +808,7 @@ async function createWidget() {
             timeRowStack.centerAlignContent();
             const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
             mainTime.textColor = Color.white();
+            mainTime.textOpacity = departureVisualState.timeTextOpacity;
             mainTime.font = i === 0 ? primaryDepartureFont : DEPARTURE_SECONDARY_FONT;
             mainTime.lineLimit = 1;
         }

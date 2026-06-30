@@ -104,7 +104,8 @@ function loadWidgetExports() {
 globalThis.__testExports = {
     MAIN_MENU_ACTIONS,
     MAIN_MENU_ACTION,
-    getMainMenuActionForIndex
+    getMainMenuActionForIndex,
+    getDepartureVisualState
 };`, context, { filename: scriptPath });
 
     return context.__testExports;
@@ -126,4 +127,13 @@ test("main menu maps the visible Edit action to the edit action id", () => {
 
     assert.notEqual(editIndex, -1);
     assert.equal(getMainMenuActionForIndex(editIndex), MAIN_MENU_ACTION.EDIT_SAVED_STATION);
+});
+
+test("cancelled departures dim the time and use a gray line badge", () => {
+    const { getDepartureVisualState } = loadWidgetExports();
+    const state = getDepartureVisualState({ cancelled: true });
+
+    assert.equal(state.lineBackgroundColor, "#6E6E6E");
+    assert.equal(state.lineTextOpacity, 0.65);
+    assert.equal(state.timeTextOpacity, 0.45);
 });

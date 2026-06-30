@@ -88,6 +88,19 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ---
 
+## 6a. Checking Cancelled Departures
+
+**Scenario:** the next matching departure is cancelled; it should remain visible so the user understands why the expected train is not active.
+
+- [ ] Cancelled departure row remains in the list
+- [ ] Departure time appears dimmed/gray on the gradient background
+- [ ] Line badge appears gray instead of active line color
+- [ ] No extra cancellation text is added, preserving widget space
+
+**Status:** ✅ Implemented via `getDepartureVisualState` and row rendering opacity/color.
+
+---
+
 ## 7. Editing an Existing Preset
 
 **Scenario:** changes station name, platform filter, or line filter without recreating the configuration from scratch.
