@@ -134,6 +134,7 @@ test("cancelled departures dim the time and use a gray line badge", () => {
     const state = getDepartureVisualState({ cancelled: true });
 
     assert.equal(state.lineBackgroundColor, "#6E6E6E");
+    assert.equal(state.lineBackgroundOpacity, 0.45);
     assert.equal(state.lineTextOpacity, 0.65);
     assert.equal(state.timeTextOpacity, 0.45);
 });

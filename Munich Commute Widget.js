@@ -88,6 +88,7 @@ const MAIN_MENU_ACTIONS = Object.freeze([
 // Fixed secondary departure font (for departures 2-6)
 const DEPARTURE_SECONDARY_FONT = Font.boldSystemFont(16);
 const CANCELLED_DEPARTURE_LINE_COLOR = "#6E6E6E";
+const CANCELLED_DEPARTURE_LINE_BACKGROUND_OPACITY = 0.45;
 const CANCELLED_DEPARTURE_LINE_TEXT_OPACITY = 0.65;
 const CANCELLED_DEPARTURE_TIME_OPACITY = 0.45;
 
@@ -326,6 +327,7 @@ function getDepartureVisualState(departure) {
     if (departure && departure.cancelled === true) {
         return {
             lineBackgroundColor: CANCELLED_DEPARTURE_LINE_COLOR,
+            lineBackgroundOpacity: CANCELLED_DEPARTURE_LINE_BACKGROUND_OPACITY,
             lineTextOpacity: CANCELLED_DEPARTURE_LINE_TEXT_OPACITY,
             timeTextOpacity: CANCELLED_DEPARTURE_TIME_OPACITY
         };
@@ -333,6 +335,7 @@ function getDepartureVisualState(departure) {
 
     return {
         lineBackgroundColor: null,
+        lineBackgroundOpacity: 1,
         lineTextOpacity: 1,
         timeTextOpacity: 1
     };
@@ -732,9 +735,13 @@ async function createWidget() {
         const gradBottomKey = label + "_gradient_bottom";
         let usedGradient = false;
         if (departureVisualState.lineBackgroundColor) {
-            lineStack.backgroundColor = new Color(departureVisualState.lineBackgroundColor);
+            lineStack.backgroundColor = new Color(
+                departureVisualState.lineBackgroundColor,
+                departureVisualState.lineBackgroundOpacity
+            );
             lineStack.cornerRadius = 4;
             lineName.textColor = Color.white();
+            usedGradient = true;
         } else if (transportColors && transportColors[gradTopKey] && transportColors[gradBottomKey]) {
             const topColor = transportColors[gradTopKey];
             const bottomColor = transportColors[gradBottomKey];

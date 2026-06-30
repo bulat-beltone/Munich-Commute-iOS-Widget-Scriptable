@@ -94,7 +94,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 - [ ] Cancelled departure row remains in the list
 - [ ] Departure time appears dimmed/gray on the gradient background
-- [ ] Line badge appears gray instead of active line color
+- [ ] Line badge appears translucent gray instead of active line color
 - [ ] No extra cancellation text is added, preserving widget space
 
 **Status:** ✅ Implemented via `getDepartureVisualState` and row rendering opacity/color.

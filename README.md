@@ -8,7 +8,7 @@ Works based on Scriptable app.
 - **Filtering** by transport types or platform
 - **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
 - **Real-time departures** using official MVV API
-- **Cancelled departures** remain visible but appear dimmed, with a gray line badge
+- **Cancelled departures** remain visible but appear dimmed, with a translucent gray line badge
 - **Customizable colors**
 
 Color options:
