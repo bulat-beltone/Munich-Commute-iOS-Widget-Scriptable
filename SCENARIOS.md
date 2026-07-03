@@ -76,6 +76,33 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ---
 
+## 5a. Finding the Nearest S-Bahn
+
+**Scenario:** user only cares about the S-Bahn and wants the closest S-Bahn station, not the closest bus/tram stop.
+
+- [ ] `🚈 Find Nearest S-Bahn` filters the nearby list to stations served by the S-Bahn
+- [ ] Graceful message when no S-Bahn station is nearby
+- [ ] `📍 Use live location in widget` copies the `nearest-sbahn` token and shows setup instructions
+- [ ] Running the flow primes the nearest-station cache used by the widget
+
+**Status:** ✅ `findNearestStation({ sbahnOnly: true })` reusing the shared preview loop.
+
+---
+
+## 5b. Live-location Widget (`nearest` / `nearest-sbahn`)
+
+**Scenario:** user sets the widget parameter to `nearest` or `nearest-sbahn` so it always tracks the closest station to their current location.
+
+- [ ] `nearest` resolves the closest station of any type
+- [ ] `nearest-sbahn` resolves the closest station whose transport types include `SBAHN`
+- [ ] Live GPS fix is used when available and the result is cached
+- [ ] When iOS denies a background GPS fix, the widget falls back to the cached station instead of erroring
+- [ ] With neither location nor cache, a styled "location unavailable" screen is shown
+
+**Status:** ✅ `resolveNearestStation` + `NearestCache.json`. S-Bahn detection uses the nearby endpoint's `transportTypes` (falls back to `products` for the bundled dataset).
+
+---
+
 ## 6. Checking Departures with Delays
 
 **Scenario:** the next departure is delayed; the delay should be shown clearly without losing readability of the time, line, and destination.

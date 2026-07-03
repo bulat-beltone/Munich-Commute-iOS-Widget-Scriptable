@@ -55,6 +55,21 @@ const CONFIG = {
 // Profile directory for saved stations
 const PROFILE_DIRECTORY_NAME = "Munich Commute";
 const SETTINGS_FILE_NAME = "Settings.json";
+
+// Caches the last resolved nearest station per mode, so the widget can still
+// render when a live GPS fix is unavailable during background refresh.
+const NEAREST_CACHE_FILE_NAME = "NearestCache.json";
+
+// Widget parameter tokens that trigger live "nearest station" resolution.
+// `any` picks the closest station of any type; `sbahn` picks the closest
+// station served by the S-Bahn.
+const NEAREST_MODE = Object.freeze({ ANY: "any", SBAHN: "sbahn" });
+const NEAREST_TOKENS = Object.freeze({
+    "nearest": NEAREST_MODE.ANY,
+    "nearest-station": NEAREST_MODE.ANY,
+    "nearest-sbahn": NEAREST_MODE.SBAHN,
+    "nearest-s-bahn": NEAREST_MODE.SBAHN
+});
 const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
@@ -71,6 +86,7 @@ const MAIN_MENU_ACTION = Object.freeze({
     DELETE_SAVED_STATION: "deleteSavedStation",
     VIEW_SAVED_STATION: "viewSavedStation",
     FIND_NEAREST_STATION: "findNearestStation",
+    FIND_NEAREST_SBAHN: "findNearestSbahn",
     SETTINGS: "settings",
     HOW_TO_ADD_WIDGET: "howToAddWidget"
 });
@@ -78,6 +94,7 @@ const MAIN_MENU_ACTION = Object.freeze({
 const MAIN_MENU_ACTIONS = Object.freeze([
     { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Preset" },
     { id: MAIN_MENU_ACTION.FIND_NEAREST_STATION, label: "🔎 Find Nearest Station" },
+    { id: MAIN_MENU_ACTION.FIND_NEAREST_SBAHN, label: "🚈 Find Nearest S-Bahn" },
     { id: MAIN_MENU_ACTION.VIEW_SAVED_STATION, label: "👀 View Preset" },
     { id: MAIN_MENU_ACTION.EDIT_SAVED_STATION, label: "✏️ Edit Preset" },
     { id: MAIN_MENU_ACTION.DELETE_SAVED_STATION, label: "🗑️ Delete Preset" },
@@ -182,9 +199,22 @@ const LINE_COLORS = {
 // file was found, so the widget can show an error instead of a silent fallback.
 let missingPresetName = null;
 
+// Set to a NEAREST_MODE value when the widget should resolve the nearest station
+// from the current location instead of a fixed station name.
+let nearestMode = null;
+
+// When the nearest station is resolved from GPS/nearby data we already have its
+// globalId, so the widget can skip the name-based station lookup.
+let resolvedGlobalId = null;
+
 function resolveWidgetParameter(rawParameter) {
     const trimmedParameter = (rawParameter || "").trim();
     if (!trimmedParameter) return DEFAULT_WIDGET_PARAMETERS;
+
+    // "nearest" / "nearest-sbahn" are live-location tokens, not preset files.
+    if (NEAREST_TOKENS[trimmedParameter.toLowerCase()]) {
+        return trimmedParameter;
+    }
 
     // Backward-compatible: treat full key:value strings as inline parameters
     if (trimmedParameter.includes(":")) {
@@ -234,6 +264,11 @@ parameters.forEach(param => {
 
     // Allow first positional parameter to be station name
     if (!trimmedParam.includes(":")) {
+        const nearestToken = NEAREST_TOKENS[trimmedParam.toLowerCase()];
+        if (nearestToken) {
+            nearestMode = nearestToken;
+            return;
+        }
         if (!hasExplicitStation) {
             userStation = trimmedParam;
         }
@@ -551,6 +586,126 @@ async function getDepartures(globalId) {
 }
 
 // ============================================================================
+// NEAREST STATION (LIVE LOCATION)
+// ============================================================================
+
+// A station serves the S-Bahn when its transport types include "SBAHN".
+// The nearby endpoint uses `transportTypes`; the bundled dataset uses `products`.
+function stationServesSbahn(station) {
+    const types = (station && (station.transportTypes || station.products)) || [];
+    return Array.isArray(types) && types.includes("SBAHN");
+}
+
+// Picks the closest station from a nearby-stations response. When mode is
+// "sbahn", only stations served by the S-Bahn are considered.
+function pickNearestStation(stations, mode) {
+    if (!Array.isArray(stations) || stations.length === 0) return null;
+
+    const candidates = mode === NEAREST_MODE.SBAHN
+        ? stations.filter(stationServesSbahn)
+        : stations.slice();
+
+    if (candidates.length === 0) return null;
+
+    // The API returns stations sorted by distance, but sort defensively so a
+    // change in ordering can never surface a farther station.
+    candidates.sort((a, b) =>
+        (a.distanceInMeters ?? Infinity) - (b.distanceInMeters ?? Infinity));
+
+    const nearest = candidates[0];
+    return {
+        name: nearest.name,
+        globalId: nearest.globalId,
+        distanceInMeters: nearest.distanceInMeters
+    };
+}
+
+async function getCurrentLocationSafe() {
+    try {
+        Location.setAccuracyToHundredMeters();
+        const location = await Location.current();
+        return { latitude: location.latitude, longitude: location.longitude };
+    } catch (e) {
+        console.log(`[WARN] Could not determine current location: ${e}`);
+        return null;
+    }
+}
+
+async function fetchNearbyStations(latitude, longitude) {
+    const url = `https://www.mvg.de/api/bgw-pt/v3/stations/nearby?latitude=${latitude}&longitude=${longitude}`;
+    try {
+        const stations = await new Request(url).loadJSON();
+        return Array.isArray(stations) ? stations : [];
+    } catch (e) {
+        console.log(`[ERROR] Failed to fetch nearby stations: ${e}`);
+        return [];
+    }
+}
+
+function saveNearestCache(mode, station) {
+    try {
+        const fileManager = FileManager.iCloud();
+        const cachePath = fileManager.joinPath(ensureAppDirectory(), NEAREST_CACHE_FILE_NAME);
+        let cache = {};
+        if (fileManager.fileExists(cachePath)) {
+            try {
+                cache = JSON.parse(fileManager.readString(cachePath)) || {};
+            } catch (e) {
+                cache = {};
+            }
+        }
+        cache[mode] = {
+            name: station.name,
+            globalId: station.globalId,
+            timestamp: Date.now()
+        };
+        fileManager.writeString(cachePath, JSON.stringify(cache, null, 2));
+    } catch (e) {
+        console.log(`[WARN] Failed to cache nearest station: ${e}`);
+    }
+}
+
+function loadNearestCache(mode) {
+    try {
+        const fileManager = FileManager.iCloud();
+        const cachePath = fileManager.joinPath(getAppDirectory(), NEAREST_CACHE_FILE_NAME);
+        if (!fileManager.fileExists(cachePath)) return null;
+        const cache = JSON.parse(fileManager.readString(cachePath));
+        const entry = cache && cache[mode];
+        if (entry && entry.globalId) {
+            return { name: entry.name, globalId: entry.globalId, fromCache: true };
+        }
+    } catch (e) {
+        console.log(`[WARN] Failed to read nearest cache: ${e}`);
+    }
+    return null;
+}
+
+// Resolves the nearest station for the given mode. Tries a live GPS fix first
+// and caches the result; if the fix or network call fails (common during
+// background widget refresh), it falls back to the most recent cached station.
+async function resolveNearestStation(mode) {
+    const location = await getCurrentLocationSafe();
+    if (location) {
+        console.log(`[INFO] Current location: ${location.latitude}, ${location.longitude}`);
+        const stations = await fetchNearbyStations(location.latitude, location.longitude);
+        const nearest = pickNearestStation(stations, mode);
+        if (nearest) {
+            console.log(`[INFO] Nearest ${mode} station: ${nearest.name} (${nearest.distanceInMeters}m)`);
+            saveNearestCache(mode, nearest);
+            return nearest;
+        }
+        console.log(`[WARN] No matching station found nearby for mode '${mode}'.`);
+    }
+
+    const cached = loadNearestCache(mode);
+    if (cached) {
+        console.log(`[INFO] Falling back to cached nearest ${mode} station: ${cached.name}`);
+    }
+    return cached;
+}
+
+// ============================================================================
 // WIDGET CREATION & RENDERING
 // ============================================================================
 
@@ -610,19 +765,39 @@ async function createWidget() {
     const primaryDepartureFont = getDeparturePrimaryFont();
     console.log(`[INFO]   - Device: ${Device.model()}`);
 
-    console.log('[INFO] Step 3: Fetching station ID...');
-    const stationResult = await getStationId(userStation);
-    if (!stationResult) {
-        console.log(`[ERROR]   - Station not found for name: ${userStation}`);
-        const searchedStation = userStation.replace(/^München-/, '');
-        return createMessageWidget(
-            `"${searchedStation}" not found`,
-            "exclamationmark.magnifyingglass"
-        );
+    if (nearestMode) {
+        console.log(`[INFO] Step 3: Resolving nearest station (mode: ${nearestMode})...`);
+        const nearest = await resolveNearestStation(nearestMode);
+        if (!nearest) {
+            const label = nearestMode === NEAREST_MODE.SBAHN ? "S-Bahn station" : "station";
+            return createMessageWidget(
+                `No nearby ${label} — location unavailable`,
+                "location.slash"
+            );
+        }
+        userStation = nearest.name;
+        resolvedGlobalId = nearest.globalId;
     }
-    const globalId = stationResult.globalId;
-    userStation = stationResult.name; // Use the actual station name from the API
-    console.log(`[INFO]   - Station ID found: ${globalId}`);
+
+    let globalId;
+    if (resolvedGlobalId) {
+        globalId = resolvedGlobalId;
+        console.log(`[INFO] Step 3: Using resolved station "${userStation}" (globalId: ${globalId})`);
+    } else {
+        console.log('[INFO] Step 3: Fetching station ID...');
+        const stationResult = await getStationId(userStation);
+        if (!stationResult) {
+            console.log(`[ERROR]   - Station not found for name: ${userStation}`);
+            const searchedStation = userStation.replace(/^München-/, '');
+            return createMessageWidget(
+                `"${searchedStation}" not found`,
+                "exclamationmark.magnifyingglass"
+            );
+        }
+        globalId = stationResult.globalId;
+        userStation = stationResult.name; // Use the actual station name from the API
+        console.log(`[INFO]   - Station ID found: ${globalId}`);
+    }
 
     console.log('[INFO] Step 4: Fetching departures from MVG API...');
     let departures = await getDepartures(globalId);
@@ -847,9 +1022,12 @@ async function createWidget() {
 // WIZARD FLOWS
 // ============================================================================
 
-async function findNearestStation() {
+async function findNearestStation({ sbahnOnly = false } = {}) {
+    const mode = sbahnOnly ? NEAREST_MODE.SBAHN : NEAREST_MODE.ANY;
+    const widgetToken = sbahnOnly ? "nearest-sbahn" : "nearest";
+
     // Request location permission and get current location
-    Location.setAccuracyToThreeKilometers();
+    Location.setAccuracyToHundredMeters();
     let location;
     try {
         location = await Location.current();
@@ -890,15 +1068,32 @@ async function findNearestStation() {
         return null;
     }
 
-    console.log(`[INFO] Found ${stations.length} nearby stations`);
+    if (sbahnOnly) {
+        stations = stations.filter(stationServesSbahn);
+        if (stations.length === 0) {
+            const noMatchAlert = new Alert();
+            noMatchAlert.title = "No S-Bahn nearby";
+            noMatchAlert.message = "No S-Bahn stations were found near your current location.";
+            noMatchAlert.addAction("OK");
+            await noMatchAlert.presentAlert();
+            return null;
+        }
+    }
+
+    console.log(`[INFO] Found ${stations.length} nearby ${sbahnOnly ? "S-Bahn " : ""}stations`);
 
     // API returns stations already sorted by distance with distanceInMeters
     const nearestStations = stations.slice(0, 10);
 
+    // Prime the widget cache with the closest match so the "${widgetToken}"
+    // widget parameter has a fallback when it cannot get a live GPS fix.
+    const cacheCandidate = pickNearestStation(stations, mode);
+    if (cacheCandidate) saveNearestCache(mode, cacheCandidate);
+
     // Show selection alert
     const selectionAlert = new Alert();
-    selectionAlert.title = "Select Nearest Station";
-    selectionAlert.message = `Found ${nearestStations.length} stations nearby:`;
+    selectionAlert.title = sbahnOnly ? "Select Nearest S-Bahn" : "Select Nearest Station";
+    selectionAlert.message = `Found ${nearestStations.length} ${sbahnOnly ? "S-Bahn " : ""}stations nearby:`;
 
     nearestStations.forEach(station => {
         const distance = station.distanceInMeters >= 1000
@@ -944,6 +1139,7 @@ async function findNearestStation() {
             { id: "line", label: `🚆 Line: ${lines || "all"}` },
             { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
             { id: "save", label: "💾 Save as Preset" },
+            { id: "useInWidget", label: "📍 Use live location in widget" },
             { id: "show", label: "▶️ Show" }
         ];
         if (hasDefaults) actions.push({ id: "showNoFilters", label: "▶️ Show without filters" });
@@ -994,6 +1190,13 @@ async function findNearestStation() {
                 return null;
             }
             // Name prompt cancelled — stay in the menu.
+        } else if (action === "useInWidget") {
+            Pasteboard.copy(widgetToken);
+            const infoAlert = new Alert();
+            infoAlert.title = "Live location widget";
+            infoAlert.message = `Set your widget's Parameter to:\n\n${widgetToken}\n\n(copied to clipboard)\n\nThe widget will always show departures for the ${sbahnOnly ? "closest S-Bahn station" : "closest station"} to your current location. If iOS can't get a location while the widget refreshes, it falls back to the last known ${sbahnOnly ? "S-Bahn " : ""}station.`;
+            infoAlert.addAction("OK");
+            await infoAlert.presentAlert();
         } else if (action === "showNoFilters") {
             // Preview without filters, but keep the configured defaults for next time.
             await presentPreview("", "");
@@ -1719,6 +1922,10 @@ async function main() {
             // Find Nearest Station - wizard with geolocation.
             // Handles its own preview loop and optional save, so nothing to render afterwards.
             await findNearestStation();
+            return;
+        } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_SBAHN) {
+            // Find Nearest S-Bahn - same wizard, restricted to S-Bahn stations.
+            await findNearestStation({ sbahnOnly: true });
             return;
         } else if (menuAction === MAIN_MENU_ACTION.SETTINGS) {
             await showSettings();

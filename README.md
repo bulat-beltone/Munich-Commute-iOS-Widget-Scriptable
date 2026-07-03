@@ -7,6 +7,7 @@ Works based on Scriptable app.
 
 - **Filtering** by transport types or platform
 - **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
+- **Nearest station in the widget** — a widget that always tracks the closest station (or closest **S-Bahn**) to your current location
 - **Real-time departures** using official MVV API
 - **Cancelled departures** remain visible but appear dimmed, with a translucent gray line badge
 - **Customizable colors**
@@ -37,6 +38,7 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 |--------|-------------|
 | ➕ Create Preset | Save a station configuration to a file for use as a widget |
 | 🔎 Find Nearest Station | Show departures for the nearest station using GPS |
+| 🚈 Find Nearest S-Bahn | Same as above, but restricted to the closest S-Bahn station |
 | 👀 View Preset | Preview a preset as a widget |
 | ✏️ Edit Preset | Edit a preset's configuration |
 | 🗑️ Delete Preset | Delete a preset file |
@@ -57,14 +59,32 @@ After saving:
 - A "Add to Home Screen" screen appears with setup instructions
 - The preset is saved to `Munich Commute/<PresetName>.txt` inside the Scriptable iCloud folder
 
-#### 🔎 Find Nearest Station
+#### 🔎 Find Nearest Station / 🚈 Find Nearest S-Bahn
 Shows live departures for a nearby station without saving anything:
 
 1. Your location is used to find stations within range
+   - **Find Nearest S-Bahn** restricts the list to stations served by the S-Bahn
 2. Select a station from the list
 3. A filter menu appears — set Line and/or Platform filters, or tap **Show** immediately
    - If defaults are configured in Settings, a **Show without filters** option also appears
+   - Tap **📍 Use live location in widget** to copy the `nearest` / `nearest-sbahn` parameter and see setup instructions
 4. The widget preview opens with live departures
+
+Running either flow once also grants location permission and primes the cache used by the live-location widget parameter (see below).
+
+#### 📍 Nearest station widget (live location)
+Instead of a fixed station, you can set the widget **Parameter** to a live-location token so the widget always shows the closest station to wherever you are:
+
+| Parameter | Behaviour |
+|-----------|-----------|
+| `nearest` | Closest station of any type |
+| `nearest-sbahn` | Closest station served by the **S-Bahn** |
+
+How it works:
+- On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match (for `nearest-sbahn`, only stations whose transport types include `SBAHN`).
+- The resolved station is cached. iOS heavily restricts GPS access while a widget refreshes in the background, so if a live fix isn't available the widget falls back to the **last known** nearest station instead of showing an error.
+- Run **🔎 Find Nearest Station** / **🚈 Find Nearest S-Bahn** from the app once to grant location permission and seed that cache.
+- You can combine the token with a gradient in a preset file, e.g. `nearest-sbahn; gradient: blue`.
 
 #### ⚙️ Settings
 Accessible from the main menu. Changes save immediately — no Save button needed.
@@ -134,8 +154,8 @@ All widget data is stored in a single folder inside the Scriptable iCloud folder
 iCloud Drive/Scriptable/Munich Commute/
 ├── Home.txt                      ← preset
 ├── Work.txt                      ← preset
-├── Settings.json                 ← transport types, subtract minutes
-└── Find Nearest Defaults.txt     ← pre-filled line/platform filters
+├── Settings.json                 ← transport types, subtract minutes, Find Nearest defaults
+└── NearestCache.json             ← last known nearest station (fallback for `nearest`/`nearest-sbahn`)
 ```
 
 Preset file locations (searched in order):
