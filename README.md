@@ -84,6 +84,7 @@ How it works:
 - On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match (for `nearest-sbahn`, only stations whose transport types include `SBAHN`).
 - The resolved station is cached. iOS heavily restricts GPS access while a widget refreshes in the background, so if a live fix isn't available the widget falls back to the **last known** nearest station instead of showing an error.
 - Run **🔎 Find Nearest Station** / **🚈 Find Nearest S-Bahn** from the app once to grant location permission and seed that cache.
+- The **Station Defaults** (Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. only show `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override them.
 - You can combine the token with a gradient in a preset file, e.g. `nearest-sbahn; gradient: blue`.
 
 #### ⚙️ Settings

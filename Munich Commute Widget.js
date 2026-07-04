@@ -766,6 +766,17 @@ async function createWidget() {
     console.log(`[INFO]   - Device: ${Device.model()}`);
 
     if (nearestMode) {
+        // Apply the Find Nearest defaults from Settings unless the widget
+        // parameter already specified an explicit line/platform filter.
+        if (userLines === null && DEFAULT_STATION_LINES) {
+            userLines = parseLineFilter(DEFAULT_STATION_LINES);
+            console.log(`[INFO]   - Applying default line filter: ${DEFAULT_STATION_LINES}`);
+        }
+        if (userPlatforms === null && DEFAULT_STATION_PLATFORM) {
+            userPlatforms = parsePlatformFilter(DEFAULT_STATION_PLATFORM);
+            console.log(`[INFO]   - Applying default platform filter: ${DEFAULT_STATION_PLATFORM}`);
+        }
+
         console.log(`[INFO] Step 3: Resolving nearest station (mode: ${nearestMode})...`);
         const nearest = await resolveNearestStation(nearestMode);
         if (!nearest) {
