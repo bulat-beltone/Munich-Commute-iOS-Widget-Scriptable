@@ -73,6 +73,7 @@ function createScriptableMocks() {
         Font: {
             boldSystemFont: size => ({ type: "bold", size }),
             caption1: () => ({ type: "caption1" }),
+            caption2: () => ({ type: "caption2" }),
             semiboldSystemFont: size => ({ type: "semibold", size })
         },
         LinearGradient: class {},
