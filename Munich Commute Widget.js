@@ -101,31 +101,56 @@ const MAIN_MENU_ACTIONS = Object.freeze([
     { id: MAIN_MENU_ACTION.SETTINGS, label: "⚙️ Settings" },
 ]);
 
-const CANCELLED_DEPARTURE_LINE_COLOR = "#FFFFFF";
-const CANCELLED_DEPARTURE_LINE_BACKGROUND_OPACITY = 0.10;
-const CANCELLED_DEPARTURE_TEXT_OPACITY = 0.30;
-const CANCELLED_DEPARTURE_MARK_COLOR = "#DB5C5C";
-const CANCELLED_DEPARTURE_MARK_SYMBOL = "xmark.circle";
-
-// Platform badge: a small rounded, translucent-white square shown at the
-// right edge of a departure row.
-const PLATFORM_BADGE_COLOR = "#FFFFFF";
-const PLATFORM_BADGE_BACKGROUND_OPACITY = 0.18;
-const PLATFORM_BADGE_CORNER_RADIUS = 4;
-
 // ============================================================================
 // WIDGET SIZE CONFIGURATION
 // ============================================================================
 
+// All colors, opacities, and sizes used to render a departure row live here,
+// so the look of the widget can be tweaked without touching any rendering
+// logic below. Each departure row is laid out as a 2x2 grid:
+//   [ line badge ]  [ time ]
+//   [ platform   ]  [ destination ]
 const WIDGET_CONFIG = {
     primaryDepartureFontSize: 24,
     secondaryDepartureFontSize: 18,
+
+    // Gap between the badge/time row and the platform/destination row.
+    subRowGap: 3,
+
+    // Time (top-right)
+    timeTextColor: "#FFFFFF",
+    timeTextOpacity: 1,
+
+    // Line badge (top-left)
     lineBadgeSize: new Size(24, 15),
     lineBadgeFont: Font.boldSystemFont(11),
-    platformBadgeSize: new Size(18, 18),
-    platformBadgeFont: Font.boldSystemFont(10),
+    lineBadgeCornerRadius: 4,
+    lineBadgeMinimumScaleFactor: 0.4,
+    lineBadgeTextColor: "#FFFFFF", // used when a line has no dedicated foreground color
+    lineBadgeTextOpacity: 1,
+
+    // Platform badge (bottom-left) — a small rounded, translucent-white
+    // square aligned under the line badge.
+    platformBadgeSize: new Size(13, 13),
+    platformBadgeFont: Font.boldSystemFont(8),
+    platformBadgeCornerRadius: 4,
+    platformBadgeMinimumScaleFactor: 0.6,
+    platformBadgeTextColor: "#FFFFFF",
+    platformBadgeTextOpacity: 0.7,
+    platformBadgeBackgroundColor: "#FFFFFF",
+    platformBadgeBackgroundOpacity: 0.18,
+
+    // Destination (bottom-right)
     destinationFont: Font.caption2(),
+    destinationTextColor: "#FFFFFF",
     textWithOpacity: 0.5,
+
+    // Cancelled-departure styling (replaces the normal colors/opacities above)
+    cancelledLineBadgeColor: "#FFFFFF",
+    cancelledLineBadgeBackgroundOpacity: 0.10,
+    cancelledTextOpacity: 0.30,
+    cancelledMarkColor: "#DB5C5C",
+    cancelledMarkSymbol: "xmark.circle",
 
     small: {
         itemsCount: 2,
@@ -489,14 +514,16 @@ function getLineColor(transportType, label) {
     return LINE_COLORS[transportType] || "#FFFFFF";
 }
 
-function getDepartureVisualState(departure) {
+function getDepartureVisualState(departure, widgetConfig = WIDGET_CONFIG) {
     if (departure && departure.cancelled === true) {
         return {
-            lineBackgroundColor: CANCELLED_DEPARTURE_LINE_COLOR,
-            lineBackgroundOpacity: CANCELLED_DEPARTURE_LINE_BACKGROUND_OPACITY,
-            lineTextOpacity: CANCELLED_DEPARTURE_TEXT_OPACITY,
-            timeTextOpacity: CANCELLED_DEPARTURE_TEXT_OPACITY,
-            destinationTextOpacity: CANCELLED_DEPARTURE_TEXT_OPACITY
+            lineBackgroundColor: widgetConfig.cancelledLineBadgeColor,
+            lineBackgroundOpacity: widgetConfig.cancelledLineBadgeBackgroundOpacity,
+            lineTextOpacity: widgetConfig.cancelledTextOpacity,
+            timeTextOpacity: widgetConfig.cancelledTextOpacity,
+            destinationTextOpacity: widgetConfig.cancelledTextOpacity,
+            platformTextOpacity: widgetConfig.cancelledTextOpacity,
+            platformBackgroundOpacity: widgetConfig.platformBadgeBackgroundOpacity * widgetConfig.cancelledTextOpacity
         };
     }
 
@@ -505,17 +532,19 @@ function getDepartureVisualState(departure) {
         lineBackgroundOpacity: 1,
         lineTextOpacity: 1,
         timeTextOpacity: 1,
-        destinationTextOpacity: null
+        destinationTextOpacity: null,
+        platformTextOpacity: null,
+        platformBackgroundOpacity: null
     };
 }
 
-function addCancelledDepartureMark(timeRowStack, departureFont, departureFontSize) {
+function addCancelledDepartureMark(timeRowStack, departureFont, departureFontSize, widgetConfig) {
     timeRowStack.addSpacer(4);
-    const cancelSymbol = SFSymbol.named(CANCELLED_DEPARTURE_MARK_SYMBOL);
+    const cancelSymbol = SFSymbol.named(widgetConfig.cancelledMarkSymbol);
     cancelSymbol.applyFont(departureFont);
     const cancelIcon = timeRowStack.addImage(cancelSymbol.image);
     cancelIcon.imageSize = new Size(departureFontSize, departureFontSize);
-    cancelIcon.tintColor = new Color(CANCELLED_DEPARTURE_MARK_COLOR);
+    cancelIcon.tintColor = new Color(widgetConfig.cancelledMarkColor);
 }
 
 async function presentWidgetPreview(widget, widgetSize) {
@@ -551,12 +580,8 @@ function getDepartureFonts(index, widgetConfig) {
     return { departureFontSize, departureFont };
 }
 
-function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPadding) {
-    const departureVisualState = getDepartureVisualState(departure);
-    const lineBadgeContainer = parentStack.addStack();
-    lineBadgeContainer.layoutVertically();
-    lineBadgeContainer.setPadding(badgeTopPadding, 0, 0, 0);
-    const lineStack = lineBadgeContainer.addStack();
+function addStyledLineBadge(parentStack, departure, widgetConfig, departureVisualState) {
+    const lineStack = parentStack.addStack();
     lineStack.size = widgetConfig.lineBadgeSize;
     lineStack.centerAlignContent();
 
@@ -573,8 +598,8 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
             departureVisualState.lineBackgroundColor,
             departureVisualState.lineBackgroundOpacity
         );
-        lineStack.cornerRadius = 4;
-        lineName.textColor = Color.white();
+        lineStack.cornerRadius = widgetConfig.lineBadgeCornerRadius;
+        lineName.textColor = new Color(widgetConfig.lineBadgeTextColor);
         usedGradient = true;
     } else if (transportColors && transportColors[gradTopKey] && transportColors[gradBottomKey]) {
         const grad = new LinearGradient();
@@ -583,31 +608,29 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
         grad.startPoint = new Point(0, 0);
         grad.endPoint = new Point(0, 1);
         lineStack.backgroundGradient = grad;
-        lineStack.cornerRadius = 4;
+        lineStack.cornerRadius = widgetConfig.lineBadgeCornerRadius;
         usedGradient = true;
-        lineName.textColor = Color.white();
+        lineName.textColor = new Color(widgetConfig.lineBadgeTextColor);
     }
     if (!usedGradient) {
         lineStack.backgroundColor = new Color(lineColor);
-        lineStack.cornerRadius = 4;
+        lineStack.cornerRadius = widgetConfig.lineBadgeCornerRadius;
         const fgKey = label + "_fg";
         if (transportColors && transportColors[fgKey]) {
             lineName.textColor = new Color(transportColors[fgKey]);
         } else {
-            lineName.textColor = Color.white();
+            lineName.textColor = new Color(widgetConfig.lineBadgeTextColor);
         }
     }
 
     lineName.font = widgetConfig.lineBadgeFont;
     lineName.textOpacity = departureVisualState.lineTextOpacity;
     lineName.centerAlignText();
-    lineName.minimumScaleFactor = 0.4;
-
-    return departureVisualState;
+    lineName.minimumScaleFactor = widgetConfig.lineBadgeMinimumScaleFactor;
 }
 
 function addDepartureTimeRow(parentStack, departure, index, widgetConfig, departureVisualState) {
-    // Always render the actual (real-time) arrival time in white — the
+    // Always render the actual (real-time) arrival time — the
     // planned-vs-delayed distinction is intentionally not shown.
     const { departureFontSize, departureFont } = getDepartureFonts(index, widgetConfig);
     const adjustedTime = getAdjustedDepartureTimestamp(departure);
@@ -620,7 +643,7 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
     const minutes = displayDate.getMinutes().toString().padStart(2, '0');
 
     const hoursText = timeRowStack.addText(hours);
-    hoursText.textColor = Color.white();
+    hoursText.textColor = new Color(widgetConfig.timeTextColor);
     hoursText.textOpacity = departureVisualState.timeTextOpacity;
     hoursText.font = departureFont;
     hoursText.lineLimit = 1;
@@ -628,13 +651,13 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
     timeRowStack.addSpacer(index === 0 ? 2 : 1);
 
     const minutesText = timeRowStack.addText(':' + minutes);
-    minutesText.textColor = Color.white();
+    minutesText.textColor = new Color(widgetConfig.timeTextColor);
     minutesText.textOpacity = departureVisualState.timeTextOpacity;
     minutesText.font = departureFont;
     minutesText.lineLimit = 1;
 
     if (departure.cancelled) {
-        addCancelledDepartureMark(timeRowStack, departureFont, departureFontSize);
+        addCancelledDepartureMark(timeRowStack, departureFont, departureFontSize, widgetConfig);
     }
 }
 
@@ -644,51 +667,78 @@ function addDepartureDestination(parentStack, departure, widgetConfig, departure
     // default tail-truncation for a single-line text.
     const destinationName = parentStack.addText(departure.destination);
     destinationName.font = widgetConfig.destinationFont;
-    destinationName.textColor = Color.white();
+    destinationName.textColor = new Color(widgetConfig.destinationTextColor);
     destinationName.textOpacity = departureVisualState.destinationTextOpacity ?? widgetConfig.textWithOpacity;
     destinationName.lineLimit = 1;
 }
 
-// Small rounded, translucent-white square at the right edge of a row,
-// showing which platform the departure uses.
+// Small rounded, translucent-white square shown under the line badge,
+// indicating which platform the departure uses.
 function addPlatformBadge(parentStack, departure, widgetConfig, departureVisualState) {
     const badge = parentStack.addStack();
     badge.size = widgetConfig.platformBadgeSize;
     badge.centerAlignContent();
-    badge.backgroundColor = new Color(PLATFORM_BADGE_COLOR, PLATFORM_BADGE_BACKGROUND_OPACITY * departureVisualState.lineTextOpacity);
-    badge.cornerRadius = PLATFORM_BADGE_CORNER_RADIUS;
+    badge.backgroundColor = new Color(
+        widgetConfig.platformBadgeBackgroundColor,
+        departureVisualState.platformBackgroundOpacity ?? widgetConfig.platformBadgeBackgroundOpacity
+    );
+    badge.cornerRadius = widgetConfig.platformBadgeCornerRadius;
 
     const platformText = badge.addText(String(departure.platform));
     platformText.font = widgetConfig.platformBadgeFont;
-    platformText.textColor = Color.white();
-    platformText.textOpacity = departureVisualState.lineTextOpacity;
+    platformText.textColor = new Color(widgetConfig.platformBadgeTextColor);
+    platformText.textOpacity = departureVisualState.platformTextOpacity ?? widgetConfig.platformBadgeTextOpacity;
     platformText.centerAlignText();
     platformText.lineLimit = 1;
-    platformText.minimumScaleFactor = 0.6;
+    platformText.minimumScaleFactor = widgetConfig.platformBadgeMinimumScaleFactor;
 }
 
+// Lays out a departure as a 2x2 grid:
+//   [ line badge ]  [ time ]
+//   [ platform   ]  [ destination ]
+// The left column (line badge / platform badge) is a fixed width so the
+// platform badge lines up directly under the line badge, right-aligned
+// within that column. The right column (time / destination) fills the
+// remaining width; destination is left-aligned (under the time) and
+// vertically centered against the platform badge's row height.
 function addDepartureRowContent(rowStack, departure, index, widgetConfig) {
-    rowStack.layoutHorizontally();
-    rowStack.topAlignContent();
+    rowStack.layoutVertically();
+    rowStack.spacing = 0;
 
-    const departureVisualState = addStyledLineBadge(rowStack, departure, widgetConfig, index === 0 ? 5 : 3);
-    rowStack.addSpacer(8);
+    const departureVisualState = getDepartureVisualState(departure, widgetConfig);
+    const leftColumnWidth = widgetConfig.lineBadgeSize.width;
 
-    const infoStack = rowStack.addStack();
-    infoStack.layoutVertically();
-    infoStack.spacing = 0;
+    const topRow = rowStack.addStack();
+    topRow.layoutHorizontally();
+    topRow.centerAlignContent();
 
-    addDepartureTimeRow(infoStack, departure, index, widgetConfig, departureVisualState);
-    addDepartureDestination(infoStack, departure, widgetConfig, departureVisualState);
+    addStyledLineBadge(topRow, departure, widgetConfig, departureVisualState);
+    topRow.addSpacer(8);
+    addDepartureTimeRow(topRow, departure, index, widgetConfig, departureVisualState);
+    topRow.addSpacer();
 
-    rowStack.addSpacer();
+    rowStack.addSpacer(widgetConfig.subRowGap);
 
+    const bottomRow = rowStack.addStack();
+    bottomRow.layoutHorizontally();
+    bottomRow.centerAlignContent();
+
+    const platformColumn = bottomRow.addStack();
+    platformColumn.layoutHorizontally();
+    platformColumn.size = new Size(leftColumnWidth, widgetConfig.platformBadgeSize.height);
+    platformColumn.centerAlignContent();
+    platformColumn.addSpacer();
     if (shouldShowPlatformBadge(departure)) {
-        const platformContainer = rowStack.addStack();
-        platformContainer.layoutVertically();
-        platformContainer.setPadding(index === 0 ? 5 : 3, 0, 0, 0);
-        addPlatformBadge(platformContainer, departure, widgetConfig, departureVisualState);
+        addPlatformBadge(platformColumn, departure, widgetConfig, departureVisualState);
     }
+
+    bottomRow.addSpacer(8);
+
+    const destinationColumn = bottomRow.addStack();
+    destinationColumn.layoutHorizontally();
+    destinationColumn.centerAlignContent();
+    addDepartureDestination(destinationColumn, departure, widgetConfig, departureVisualState);
+    destinationColumn.addSpacer();
 }
 
 function addDepartureListRow(mainStack, departure, index, widgetConfig, isLast) {
