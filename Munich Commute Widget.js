@@ -670,7 +670,6 @@ function addDepartureDestination(parentStack, departure, widgetConfig, departure
     destinationName.textColor = new Color(widgetConfig.destinationTextColor);
     destinationName.textOpacity = departureVisualState.destinationTextOpacity ?? widgetConfig.textWithOpacity;
     destinationName.lineLimit = 1;
-    destinationName.centerAlignText();
 }
 
 // Small rounded, translucent-white square shown under the line badge,
@@ -700,7 +699,8 @@ function addPlatformBadge(parentStack, departure, widgetConfig, departureVisualS
 // The left column (line badge / platform badge) is a fixed width so the
 // platform badge lines up directly under the line badge, right-aligned
 // within that column. The right column (time / destination) fills the
-// remaining width, with the destination centered within it.
+// remaining width; destination is left-aligned (under the time) and
+// vertically centered against the platform badge's row height.
 function addDepartureRowContent(rowStack, departure, index, widgetConfig) {
     rowStack.layoutVertically();
     rowStack.spacing = 0;
@@ -737,7 +737,6 @@ function addDepartureRowContent(rowStack, departure, index, widgetConfig) {
     const destinationColumn = bottomRow.addStack();
     destinationColumn.layoutHorizontally();
     destinationColumn.centerAlignContent();
-    destinationColumn.addSpacer();
     addDepartureDestination(destinationColumn, departure, widgetConfig, departureVisualState);
     destinationColumn.addSpacer();
 }

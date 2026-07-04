@@ -149,7 +149,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 **Scenario:** each departure row renders as a 2x2 grid — line badge and time on top, platform badge and destination underneath — and both the destination and the platform badge should be readable without the destination font shrinking illegibly.
 
 - [ ] Long destination names are truncated with an ellipsis (`…`), not shrunk to a smaller font
-- [ ] The destination is horizontally centered underneath the time
+- [ ] The destination is left-aligned underneath the time, and vertically centered against the platform badge
 - [ ] A small rounded, translucent-white platform badge appears directly under the line badge (right-aligned within a column the same width as the line badge) when the departure has platform info
 - [ ] The badge is hidden only when the active platform filter narrows to exactly **one** platform (any other case — no filter, or a filter covering multiple platforms — still shows it)
 - [ ] The badge dims along with the rest of the row when the departure is cancelled

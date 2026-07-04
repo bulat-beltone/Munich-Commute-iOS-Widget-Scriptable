@@ -138,7 +138,7 @@ platform:1
 ```
 Show only departures from a specific platform (or a comma-separated list, e.g. `platform:1,2`).
 
-Each departure row is laid out as a small 2x2 grid — line badge and time on top, platform badge and destination underneath. The platform badge sits directly under the line badge (right-aligned within the same width), and the destination is centered underneath the time. It's shown by default — the only time it's hidden is when your platform filter narrows things down to exactly **one** platform, since at that point every visible departure already uses that platform and repeating it would be redundant.
+Each departure row is laid out as a small 2x2 grid — line badge and time on top, platform badge and destination underneath. The platform badge sits directly under the line badge (right-aligned within the same width), and the destination is left-aligned under the time, vertically centered against the platform badge. It's shown by default — the only time it's hidden is when your platform filter narrows things down to exactly **one** platform, since at that point every visible departure already uses that platform and repeating it would be redundant.
 
 #### Line Filtering
 ```
