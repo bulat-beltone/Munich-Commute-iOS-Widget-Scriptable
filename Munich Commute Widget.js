@@ -136,7 +136,7 @@ const WIDGET_CONFIG = {
         textWithOpacity: 0.5
     },
     medium: {
-        itemsCount: 2,
+        itemsCount: 4,
         stationNameFont: Font.semiboldSystemFont(13),
         iconSize: new Size(16, 16),
         lineBadgeSize: new Size(24, 15),
@@ -901,9 +901,9 @@ async function createWidget() {
     mainStack.addSpacer();
     console.log('[INFO]   - Added spacer after header');
 
-    // Add rows for each departure
-    for (let i = 0; i < Math.min(widgetConfig.itemsCount, departures.length); i++) {
-        const rowStack = mainStack.addStack();
+    // Renders a single departure row (line badge + time/destination) into the given container.
+    const addDepartureRow = (container, i) => {
+        const rowStack = container.addStack();
         rowStack.layoutHorizontally();
         rowStack.topAlignContent();
         const lineBadgeContainer = rowStack.addStack();
@@ -997,11 +997,45 @@ async function createWidget() {
 
         rowStack.addSpacer();
 
-        // Add vertical spacing between rows
-        if (i < Math.min(widgetConfig.itemsCount, departures.length) - 1) {
-            mainStack.addSpacer(12);
-        }
         console.log(`[INFO]   - Added row for departure ${i + 1}: line ${departures[i].label}, destination ${departures[i].destination}`);
+    };
+
+    const totalItems = Math.min(widgetConfig.itemsCount, departures.length);
+
+    if (widgetSize === 'medium') {
+        // Grid layout: one more column than before, so 4 items render as
+        // 2 columns x 2 rows instead of a single column of 2.
+        const itemsPerColumn = Math.ceil(widgetConfig.itemsCount / 2);
+        const gridStack = mainStack.addStack();
+        gridStack.layoutHorizontally();
+        gridStack.topAlignContent();
+
+        for (let col = 0; col < 2; col++) {
+            const columnStack = gridStack.addStack();
+            columnStack.layoutVertically();
+
+            for (let row = 0; row < itemsPerColumn; row++) {
+                const i = col * itemsPerColumn + row;
+                if (i >= totalItems) break;
+                addDepartureRow(columnStack, i);
+                if (row < itemsPerColumn - 1 && i + 1 < totalItems) {
+                    columnStack.addSpacer(12);
+                }
+            }
+
+            if (col === 0) gridStack.addSpacer(12);
+        }
+        gridStack.addSpacer();
+    } else {
+        // Add rows for each departure
+        for (let i = 0; i < totalItems; i++) {
+            addDepartureRow(mainStack, i);
+
+            // Add vertical spacing between rows
+            if (i < totalItems - 1) {
+                mainStack.addSpacer(12);
+            }
+        }
     }
     console.log('[INFO]   - Finished adding departure rows');
 

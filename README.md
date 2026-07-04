@@ -196,7 +196,7 @@ Sendlinger Tor;gradient:purple
 - Perfect for quick glances
 
 ### Medium Widget
-- Shows 2 departures with more destination details
+- Shows 4 departures in a 2-column grid (2 per column)
 - Better readability for longer station names
 
 ### Large Widget
