@@ -99,6 +99,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] When iOS denies a background GPS fix, the widget falls back to the cached station instead of erroring
 - [ ] With neither location nor cache, a styled "location unavailable" screen is shown
 - [ ] Station Defaults (Line / Platform) from Settings are applied automatically; explicit `lines:`/`platform:` in the parameter override them
+- [ ] Header uses a 📍 location icon and the title reads "Nearest: [station]"
 
 **Status:** ✅ `resolveNearestStation` + `NearestCache.json`. S-Bahn detection uses the nearby endpoint's `transportTypes` (falls back to `products` for the bundled dataset).
 

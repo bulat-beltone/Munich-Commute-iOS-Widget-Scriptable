@@ -869,15 +869,19 @@ async function createWidget() {
     titleStack.centerAlignContent();
     titleStack.spacing = 2;
 
-    // Add tram icon
-    const tramSymbol = SFSymbol.named("tram.fill");
+    // Add header icon: a location pin for live-location mode, otherwise the tram icon
+    const headerSymbolName = nearestMode ? "location.fill" : "tram.fill";
+    const tramSymbol = SFSymbol.named(headerSymbolName);
     tramSymbol.applyFont(widgetConfig.stationNameFont);
     const tramIcon = titleStack.addImage(tramSymbol.image);
     tramIcon.imageSize = widgetConfig.iconSize;
     tramIcon.tintColor = Color.white();
 
-    // Display station name, removing "München-" prefix if present
-    const stationName = titleStack.addText(userStation.replace(/^München-/, ''));
+    // Display station name, removing "München-" prefix if present.
+    // In live-location mode, prefix with "Nearest:" to make the mode obvious.
+    const displayStationName = userStation.replace(/^München-/, '');
+    const titleLabel = nearestMode ? `Nearest: ${displayStationName}` : displayStationName;
+    const stationName = titleStack.addText(titleLabel);
     stationName.textColor = Color.white();
     stationName.leftAlignText();
     stationName.font = widgetConfig.stationNameFont;
