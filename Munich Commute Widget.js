@@ -122,8 +122,8 @@ const WIDGET_CONFIG = {
     secondaryDepartureFontSize: 18,
     lineBadgeSize: new Size(24, 15),
     lineBadgeFont: Font.boldSystemFont(11),
-    platformBadgeSize: new Size(18, 18),
-    platformBadgeFont: Font.boldSystemFont(10),
+    platformBadgeSize: new Size(13, 13),
+    platformBadgeFont: Font.boldSystemFont(8),
     destinationFont: Font.caption2(),
     textWithOpacity: 0.5,
 
@@ -639,18 +639,28 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
 }
 
 function addDepartureDestination(parentStack, departure, widgetConfig, departureVisualState) {
+    const destinationRow = parentStack.addStack();
+    destinationRow.layoutHorizontally();
+    destinationRow.centerAlignContent();
+
+    if (shouldShowPlatformBadge(departure)) {
+        addPlatformBadge(destinationRow, departure, widgetConfig, departureVisualState);
+        destinationRow.addSpacer(4);
+    }
+
     // Truncate long destination names with an ellipsis instead of shrinking
     // the font — no minimumScaleFactor here, so iOS falls back to its
     // default tail-truncation for a single-line text.
-    const destinationName = parentStack.addText(departure.destination);
+    const destinationName = destinationRow.addText(departure.destination);
     destinationName.font = widgetConfig.destinationFont;
     destinationName.textColor = Color.white();
     destinationName.textOpacity = departureVisualState.destinationTextOpacity ?? widgetConfig.textWithOpacity;
     destinationName.lineLimit = 1;
 }
 
-// Small rounded, translucent-white square at the right edge of a row,
-// showing which platform the departure uses.
+// Small rounded, translucent-white square shown right before the
+// destination name, on the same row, indicating which platform the
+// departure uses.
 function addPlatformBadge(parentStack, departure, widgetConfig, departureVisualState) {
     const badge = parentStack.addStack();
     badge.size = widgetConfig.platformBadgeSize;
@@ -682,13 +692,6 @@ function addDepartureRowContent(rowStack, departure, index, widgetConfig) {
     addDepartureDestination(infoStack, departure, widgetConfig, departureVisualState);
 
     rowStack.addSpacer();
-
-    if (shouldShowPlatformBadge(departure)) {
-        const platformContainer = rowStack.addStack();
-        platformContainer.layoutVertically();
-        platformContainer.setPadding(index === 0 ? 5 : 3, 0, 0, 0);
-        addPlatformBadge(platformContainer, departure, widgetConfig, departureVisualState);
-    }
 }
 
 function addDepartureListRow(mainStack, departure, index, widgetConfig, isLast) {
