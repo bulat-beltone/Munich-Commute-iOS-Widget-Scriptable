@@ -9,7 +9,9 @@ Works based on Scriptable app.
 - **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
 - **Nearest station in the widget** — a widget that always tracks the closest station (or closest **S-Bahn**) to your current location
 - **Real-time departures** using official MVV API
-- **Cancelled departures** remain visible but appear dimmed, with a translucent gray line badge
+- **Actual arrival time** always shown in white — delayed and on-time departures use the same simple display
+- **Cancelled departures** remain visible with a subtle ❌ mark, dimmed line badge, time, and destination text
+- **Test data preview** — preview any widget size with fixture departures, without hitting the live API
 - **Customizable colors**
 
 Color options:
@@ -36,14 +38,15 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 
 | Action | Description |
 |--------|-------------|
-| ➕ Create Preset | Save a station configuration to a file for use as a widget |
 | 🔎 Find Nearest Station | Show departures for the nearest station using GPS |
 | 🚈 Find Nearest S-Bahn | Same as above, but restricted to the closest S-Bahn station |
-| 👀 View Preset | Preview a preset as a widget |
-| ✏️ Edit Preset | Edit a preset's configuration |
-| 🗑️ Delete Preset | Delete a preset file |
+| ➕ Create Preset | Save a station configuration to a file for use as a widget |
+| 👀 View Preset | Preview a preset as a widget (at its saved size, or an overridden size) |
+| ✏️ Edit Preset | Edit a preset's configuration, or delete it |
 | ℹ️ How to Add Widget | Step-by-step widget setup instructions |
 | ⚙️ Settings | Configure transport types, timing, and defaults |
+
+> Deleting a preset is done from **✏️ Edit Preset** — select the preset, then tap the destructive **🗑️ Delete Preset** action in the edit menu.
 
 #### ➕ Create Preset
 A wizard to create a reusable station configuration:
@@ -58,6 +61,18 @@ After saving:
 - The preset name is **copied to your clipboard**
 - A "Add to Home Screen" screen appears with setup instructions
 - The preset is saved to `Munich Commute/<PresetName>.txt` inside the Scriptable iCloud folder
+
+#### ✏️ Edit Preset
+Select an existing preset to change any of its fields, or delete it:
+
+- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset
+- **Test data** (optional) — point at a JSON file in `Munich Commute/TestData/` to preview the widget with fixed fixture departures instead of live API data (see [Test data preview](#-test-data-preview) below)
+- **🗑️ Delete Preset** — a destructive action in the same menu; confirms before permanently removing the preset file
+
+Saving shows a live large-size preview of the updated preset.
+
+#### 👀 View Preset
+Select a preset to preview it as a widget. By default this opens at large size, but if the preset (or the widget parameter you're previewing) includes a `size:` / `widget:` / `widgetsize:` override, that size is used instead — handy for checking how a preset looks as a medium or small widget without changing your home screen.
 
 #### 🔎 Find Nearest Station / 🚈 Find Nearest S-Bahn
 Shows live departures for a nearby station without saving anything:
@@ -128,7 +143,35 @@ lines:S1,S2,U3
 ```
 Show only specific lines (comma-separated).
 
+#### Test data preview
+```
+test:on-time-mix.json
+```
+Instead of fetching live departures, load fixture data from a JSON file so you can preview the widget's look (delays, cancellations, layouts) without depending on the real API or your live location. The file is looked up in:
+- `Munich Commute/TestData/<file>.json`
+- `TestData/<file>.json` (fallback)
 
+Expected format:
+```json
+{
+  "departures": [
+    { "line": "S3", "destination": "Mammendorf", "minutesFromNow": 5, "transportType": "SBAHN", "platform": 1 },
+    { "line": "S4", "destination": "Geltendorf", "minutesFromNow": 10, "delayMinutes": 4, "cancelled": true, "platform": 2 }
+  ]
+}
+```
+- `minutesFromNow` — minutes from "now" until the planned departure
+- `delayMinutes` (optional) — adds a delay on top of the planned time
+- `cancelled` (optional) — marks the departure as cancelled
+- `transportType` (optional, defaults to `SBAHN`) — used for line badge coloring
+
+Test data can be combined with `nearest` / `nearest-sbahn` — the live-location header ("Nearest: ...") still renders, but GPS and network calls are skipped entirely in favor of the fixture departures.
+
+#### Preview widget size
+```
+size:medium
+```
+Forces a specific size (`small`/`s`, `medium`/`m`, `large`/`l`) when previewing from **👀 View Preset**. This does not affect the actual home-screen widget size (that's controlled by iOS), it only affects the in-app preview.
 
 #### Visual Themes
 ```
@@ -157,7 +200,9 @@ iCloud Drive/Scriptable/Munich Commute/
 ├── Home.txt                      ← preset
 ├── Work.txt                      ← preset
 ├── Settings.json                 ← transport types, subtract minutes, Find Nearest defaults
-└── NearestCache.json             ← last known nearest station (fallback for `nearest`/`nearest-sbahn`)
+├── NearestCache.json             ← last known nearest station (fallback for `nearest`/`nearest-sbahn`)
+└── TestData/
+    └── on-time-mix.json          ← fixture departures used by the `test:` parameter
 ```
 
 Preset file locations (searched in order):
@@ -186,6 +231,11 @@ Ostbahnhof;platform:2;lines:S1,S2;gradient:green
 #### Station with gradient
 ```
 Sendlinger Tor;gradient:purple
+```
+
+#### Preview with fixture data, at medium size
+```
+station:Marienplatz;test:on-time-mix.json;size:medium
 ```
 
 ## Widget Sizes

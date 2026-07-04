@@ -122,11 +122,25 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 **Scenario:** the next matching departure is cancelled; it should remain visible so the user understands why the expected train is not active.
 
 - [ ] Cancelled departure row remains in the list
-- [ ] Departure time appears dimmed/gray on the gradient background
-- [ ] Line badge appears translucent gray instead of active line color
-- [ ] No extra cancellation text is added, preserving widget space
+- [ ] Line badge, time, and destination text all appear dimmed (~30% opacity) on the gradient background
+- [ ] Line badge background turns a subtle translucent white instead of the active line color
+- [ ] A small ❌ mark appears next to the time to make the cancellation obvious at a glance
 
-**Status:** ✅ Implemented via `getDepartureVisualState` and row rendering opacity/color.
+**Status:** ✅ Implemented via `getDepartureVisualState`, `addCancelledDepartureMark`, and the shared row-rendering helpers.
+
+---
+
+## 6b. Previewing with Fixture Data (`test:`)
+
+**Scenario:** a developer wants to check how a specific delay/cancellation/layout combination renders without depending on live API data or being physically near a station.
+
+- [ ] `test:<file>.json` loads fixture departures from `Munich Commute/TestData/<file>.json` (or `TestData/<file>.json`)
+- [ ] Live station lookup and MVG API calls are skipped entirely
+- [ ] Missing/invalid test data file shows a styled "Test data not found" screen
+- [ ] Combining `test:` with `nearest` / `nearest-sbahn` still renders the live-location header, but skips GPS/network entirely
+- [ ] The **✏️ Edit Preset** flow can set/clear a preset's test data file
+
+**Status:** ✅ `loadTestDataFile` + `buildDeparturesFromScenario`.
 
 ---
 
@@ -135,7 +149,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 **Scenario:** changes station name, platform filter, or line filter without recreating the configuration from scratch.
 
 - [ ] `✏️ Edit Preset`: select a preset
-- [ ] Edit individual fields (station, lines, platform, gradient, name)
+- [ ] Edit individual fields (station, lines, platform, gradient, test data, name)
 - [ ] Duplicate name protection
 - [ ] Preview shown after saving
 
@@ -145,9 +159,24 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ## 8. Deleting a Preset
 
-- [ ] `🗑️ Delete Preset`: select → confirm → file removed
+**Scenario:** removes a preset that's no longer needed.
 
-**Status:** ✅ `deleteSavedStation`.
+- [ ] `✏️ Edit Preset`: select a preset → tap the destructive `🗑️ Delete Preset` action in the edit menu → confirm → file removed
+- [ ] Cancelling the confirmation keeps the preset intact
+
+**Status:** ✅ `confirmAndDeletePreset`, invoked from within the Edit Preset flow (there is no separate top-level "Delete Preset" menu item).
+
+---
+
+## 8a. Previewing a Preset at a Specific Size (`size:`)
+
+**Scenario:** checking how a saved preset looks as a medium or small widget without adding it to the home screen at that size.
+
+- [ ] `👀 View Preset` respects a `size:` / `widget:` / `widgetsize:` override (`small`/`s`, `medium`/`m`, `large`/`l`) if present in the preset
+- [ ] Without an override, the preview defaults to large size
+- [ ] The override only affects the in-app preview, not the actual home-screen widget
+
+**Status:** ✅ `normalizeWidgetSize` + `getPreviewWidgetSize` + `presentWidgetPreview`, used by `viewSavedStation`.
 
 ---
 
