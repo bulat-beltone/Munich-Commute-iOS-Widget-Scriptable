@@ -968,47 +968,22 @@ async function createWidget() {
         infoStack.layoutVertically();
         infoStack.spacing = 0;
 
-        // DEPARTURE TIME
+        // DEPARTURE TIME — always the actual (real-time) arrival time in white,
+        // regardless of whether the departure is delayed.
         let recalculatedTime = departures[i].realtimeDepartureTime;
         if (typeof recalculatedTime !== 'number' && typeof departures[i].plannedDepartureTime === 'number' && typeof departures[i].delayInMinutes === 'number') {
             recalculatedTime = departures[i].plannedDepartureTime + (departures[i].delayInMinutes * 60 * 1000);
         }
         const adjustedTime = recalculatedTime - (SUBTRACT_MINUTES * 60 * 1000);
 
-        if (departures[i].delayInMinutes > 0) {
-            // Delayed: show planned and delayed minutes
-            const timeRowStack = infoStack.addStack();
-            timeRowStack.layoutHorizontally();
-            timeRowStack.centerAlignContent();
-
-            const plannedDate = new Date(departures[i].plannedDepartureTime - (SUBTRACT_MINUTES * 60 * 1000));
-            const plannedTimeStr = formatDepartureTime(plannedDate);
-            const plannedTimeText = timeRowStack.addText(plannedTimeStr);
-            plannedTimeText.textColor = Color.white();
-            plannedTimeText.textOpacity = departureVisualState.timeTextOpacity;
-            plannedTimeText.font = i === 0 ? primaryDepartureFont : DEPARTURE_SECONDARY_FONT;
-            plannedTimeText.lineLimit = 1;
-
-            timeRowStack.addSpacer(4);
-
-            const delayedDate = new Date(adjustedTime);
-            const delayedMinutes = delayedDate.getMinutes().toString().padStart(2, '0');
-            const colonMinutesText = timeRowStack.addText(':' + delayedMinutes);
-            colonMinutesText.textColor = departures[i].cancelled ? Color.white() : new Color('#DB5C5C');
-            colonMinutesText.textOpacity = departureVisualState.timeTextOpacity;
-            colonMinutesText.font = i === 0 ? primaryDepartureFont : DEPARTURE_SECONDARY_FONT;
-            colonMinutesText.lineLimit = 1;
-        } else {
-            // Not delayed: show only main time
-            const timeRowStack = infoStack.addStack();
-            timeRowStack.layoutHorizontally();
-            timeRowStack.centerAlignContent();
-            const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
-            mainTime.textColor = Color.white();
-            mainTime.textOpacity = departureVisualState.timeTextOpacity;
-            mainTime.font = i === 0 ? primaryDepartureFont : DEPARTURE_SECONDARY_FONT;
-            mainTime.lineLimit = 1;
-        }
+        const timeRowStack = infoStack.addStack();
+        timeRowStack.layoutHorizontally();
+        timeRowStack.centerAlignContent();
+        const mainTime = timeRowStack.addText(formatDepartureTime(adjustedTime));
+        mainTime.textColor = Color.white();
+        mainTime.textOpacity = departureVisualState.timeTextOpacity;
+        mainTime.font = i === 0 ? primaryDepartureFont : DEPARTURE_SECONDARY_FONT;
+        mainTime.lineLimit = 1;
 
         // DESTINATION NAME (with platform if available)
         // Show platform only if no single platform filter is applied (i.e., showing multiple platforms)

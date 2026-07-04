@@ -107,13 +107,13 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ## 6. Checking Departures with Delays
 
-**Scenario:** the next departure is delayed; the delay should be shown clearly without losing readability of the time, line, and destination.
+**Scenario:** the next departure is delayed; the widget should just show the actual (real-time) arrival time, not the planned/delayed split.
 
-- [ ] Planned departure time shown in white
-- [ ] Delayed minutes shown in red
+- [ ] Time shown is always the actual/real-time arrival, in white, whether delayed or not
+- [ ] No separate planned-time / red-delay-minutes display
 - [ ] Line, destination, and platform remain readable
 
-**Status:** ✅ Implemented in `createWidget` (`delayInMinutes > 0` branch).
+**Status:** ✅ Implemented in `createWidget` — always renders `formatDepartureTime(adjustedTime)` (derived from `realtimeDepartureTime`, falling back to `plannedDepartureTime + delayInMinutes`) in white, regardless of `delayInMinutes`.
 
 ---
 
