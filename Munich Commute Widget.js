@@ -555,7 +555,9 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
     const departureVisualState = getDepartureVisualState(departure);
     const lineBadgeContainer = parentStack.addStack();
     lineBadgeContainer.layoutVertically();
-    lineBadgeContainer.centerAlignContent();
+    // No centerAlignContent() here — the default leading/left alignment
+    // keeps the (narrower) platform badge lined up with the left edge of
+    // the line badge above it, instead of centering it underneath.
     lineBadgeContainer.setPadding(badgeTopPadding, 0, 0, 0);
     const lineStack = lineBadgeContainer.addStack();
     lineStack.size = widgetConfig.lineBadgeSize;
