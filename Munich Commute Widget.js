@@ -555,6 +555,7 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
     const departureVisualState = getDepartureVisualState(departure);
     const lineBadgeContainer = parentStack.addStack();
     lineBadgeContainer.layoutVertically();
+    lineBadgeContainer.centerAlignContent();
     lineBadgeContainer.setPadding(badgeTopPadding, 0, 0, 0);
     const lineStack = lineBadgeContainer.addStack();
     lineStack.size = widgetConfig.lineBadgeSize;
@@ -603,6 +604,11 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
     lineName.centerAlignText();
     lineName.minimumScaleFactor = 0.4;
 
+    if (shouldShowPlatformBadge(departure)) {
+        lineBadgeContainer.addSpacer(3);
+        addPlatformBadge(lineBadgeContainer, departure, widgetConfig, departureVisualState);
+    }
+
     return departureVisualState;
 }
 
@@ -639,28 +645,18 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
 }
 
 function addDepartureDestination(parentStack, departure, widgetConfig, departureVisualState) {
-    const destinationRow = parentStack.addStack();
-    destinationRow.layoutHorizontally();
-    destinationRow.centerAlignContent();
-
-    if (shouldShowPlatformBadge(departure)) {
-        addPlatformBadge(destinationRow, departure, widgetConfig, departureVisualState);
-        destinationRow.addSpacer(4);
-    }
-
     // Truncate long destination names with an ellipsis instead of shrinking
     // the font — no minimumScaleFactor here, so iOS falls back to its
     // default tail-truncation for a single-line text.
-    const destinationName = destinationRow.addText(departure.destination);
+    const destinationName = parentStack.addText(departure.destination);
     destinationName.font = widgetConfig.destinationFont;
     destinationName.textColor = Color.white();
     destinationName.textOpacity = departureVisualState.destinationTextOpacity ?? widgetConfig.textWithOpacity;
     destinationName.lineLimit = 1;
 }
 
-// Small rounded, translucent-white square shown right before the
-// destination name, on the same row, indicating which platform the
-// departure uses.
+// Small rounded, translucent-white square shown under the line badge,
+// indicating which platform the departure uses.
 function addPlatformBadge(parentStack, departure, widgetConfig, departureVisualState) {
     const badge = parentStack.addStack();
     badge.size = widgetConfig.platformBadgeSize;

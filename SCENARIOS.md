@@ -149,7 +149,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 **Scenario:** a departure has a long destination name and/or a platform, and both should be readable without the destination font shrinking illegibly.
 
 - [ ] Long destination names are truncated with an ellipsis (`…`), not shrunk to a smaller font
-- [ ] A small rounded, translucent-white platform badge appears right before the destination name, on the same line, when the departure has platform info
+- [ ] A small rounded, translucent-white platform badge appears directly under the line badge when the departure has platform info
 - [ ] The badge is hidden only when the active platform filter narrows to exactly **one** platform (any other case — no filter, or a filter covering multiple platforms — still shows it)
 - [ ] The badge dims along with the rest of the row when the departure is cancelled
 
