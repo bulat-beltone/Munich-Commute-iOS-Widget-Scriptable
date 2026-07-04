@@ -107,6 +107,12 @@ const CANCELLED_DEPARTURE_TEXT_OPACITY = 0.30;
 const CANCELLED_DEPARTURE_MARK_COLOR = "#DB5C5C";
 const CANCELLED_DEPARTURE_MARK_SYMBOL = "xmark.circle";
 
+// Platform badge: a small rounded, translucent-white square shown at the
+// right edge of a departure row.
+const PLATFORM_BADGE_COLOR = "#FFFFFF";
+const PLATFORM_BADGE_BACKGROUND_OPACITY = 0.18;
+const PLATFORM_BADGE_CORNER_RADIUS = 4;
+
 // ============================================================================
 // WIDGET SIZE CONFIGURATION
 // ============================================================================
@@ -116,6 +122,8 @@ const WIDGET_CONFIG = {
     secondaryDepartureFontSize: 18,
     lineBadgeSize: new Size(24, 15),
     lineBadgeFont: Font.boldSystemFont(11),
+    platformBadgeSize: new Size(18, 18),
+    platformBadgeFont: Font.boldSystemFont(10),
     destinationFont: Font.caption1(),
     textWithOpacity: 0.5,
 
@@ -392,6 +400,20 @@ function parseLineFilter(value) {
     return parseCommaSeparatedFilter(value, line => line.toUpperCase());
 }
 
+// The platform badge is only redundant when the platform filter has already
+// narrowed things down to a single, known platform. Any other case (no
+// filter, or a filter covering multiple platforms) still benefits from
+// showing which platform each departure uses.
+function shouldShowPlatformBadge(departure) {
+    if (!departure || departure.platform === undefined || departure.platform === null || departure.platform === "") {
+        return false;
+    }
+    if (Array.isArray(userPlatforms) && userPlatforms.length === 1) {
+        return false;
+    }
+    return true;
+}
+
 function filterDeparturesByUserPreferences(departures) {
     return departures.filter(entry => {
         const lineLabel = (entry.label || "").toUpperCase();
@@ -617,13 +639,32 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
 }
 
 function addDepartureDestination(parentStack, departure, widgetConfig, departureVisualState) {
-    const platformSuffix = !userPlatforms && departure.platform ? `, Pl. ${departure.platform}` : '';
-    const destinationName = parentStack.addText(departure.destination + platformSuffix);
+    // Truncate long destination names with an ellipsis instead of shrinking
+    // the font — no minimumScaleFactor here, so iOS falls back to its
+    // default tail-truncation for a single-line text.
+    const destinationName = parentStack.addText(departure.destination);
     destinationName.font = widgetConfig.destinationFont;
     destinationName.textColor = Color.white();
     destinationName.textOpacity = departureVisualState.destinationTextOpacity ?? widgetConfig.textWithOpacity;
     destinationName.lineLimit = 1;
-    destinationName.minimumScaleFactor = 0.5;
+}
+
+// Small rounded, translucent-white square at the right edge of a row,
+// showing which platform the departure uses.
+function addPlatformBadge(parentStack, departure, widgetConfig, departureVisualState) {
+    const badge = parentStack.addStack();
+    badge.size = widgetConfig.platformBadgeSize;
+    badge.centerAlignContent();
+    badge.backgroundColor = new Color(PLATFORM_BADGE_COLOR, PLATFORM_BADGE_BACKGROUND_OPACITY * departureVisualState.lineTextOpacity);
+    badge.cornerRadius = PLATFORM_BADGE_CORNER_RADIUS;
+
+    const platformText = badge.addText(String(departure.platform));
+    platformText.font = widgetConfig.platformBadgeFont;
+    platformText.textColor = Color.white();
+    platformText.textOpacity = departureVisualState.lineTextOpacity;
+    platformText.centerAlignText();
+    platformText.lineLimit = 1;
+    platformText.minimumScaleFactor = 0.6;
 }
 
 function addDepartureRowContent(rowStack, departure, index, widgetConfig) {
@@ -641,6 +682,13 @@ function addDepartureRowContent(rowStack, departure, index, widgetConfig) {
     addDepartureDestination(infoStack, departure, widgetConfig, departureVisualState);
 
     rowStack.addSpacer();
+
+    if (shouldShowPlatformBadge(departure)) {
+        const platformContainer = rowStack.addStack();
+        platformContainer.layoutVertically();
+        platformContainer.setPadding(index === 0 ? 5 : 3, 0, 0, 0);
+        addPlatformBadge(platformContainer, departure, widgetConfig, departureVisualState);
+    }
 }
 
 function addDepartureListRow(mainStack, departure, index, widgetConfig, isLast) {

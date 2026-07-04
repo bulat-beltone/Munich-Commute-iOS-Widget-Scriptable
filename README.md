@@ -10,6 +10,7 @@ Works based on Scriptable app.
 - **Nearest station in the widget** — a widget that always tracks the closest station (or closest **S-Bahn**) to your current location
 - **Real-time departures** using official MVV API
 - **Actual arrival time** always shown in white — delayed and on-time departures use the same simple display
+- **Platform badge** — a small rounded, translucent-white square shows which platform each departure uses; hidden only when your filter already narrows things down to a single platform
 - **Cancelled departures** remain visible with a subtle ❌ mark, dimmed line badge, time, and destination text
 - **Test data preview** — preview any widget size with fixture departures, without hitting the live API
 - **Customizable colors**
@@ -135,7 +136,9 @@ Set the station name you want to monitor. You can still use `station:Marienplatz
 ```
 platform:1
 ```
-Show only departures from a specific platform.
+Show only departures from a specific platform (or a comma-separated list, e.g. `platform:1,2`).
+
+Each departure row also shows a small rounded platform badge at the right edge. It's shown by default — the only time it's hidden is when your platform filter narrows things down to exactly **one** platform, since at that point every visible departure already uses that platform and repeating it would be redundant.
 
 #### Line Filtering
 ```

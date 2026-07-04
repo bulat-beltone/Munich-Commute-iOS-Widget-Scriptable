@@ -111,8 +111,10 @@ globalThis.__testExports = {
     NEAREST_MODE,
     NEAREST_TOKENS,
     parseWidgetParameters,
+    applyParsedWidgetParameters,
     normalizeWidgetSize,
-    buildDeparturesFromScenario
+    buildDeparturesFromScenario,
+    shouldShowPlatformBadge
 };`, context, { filename: scriptPath });
 
     return context.__testExports;
@@ -273,6 +275,39 @@ test("normalizeWidgetSize accepts short and full size names, rejects unknown val
     assert.equal(normalizeWidgetSize("L"), "large");
     assert.equal(normalizeWidgetSize("huge"), null);
     assert.equal(normalizeWidgetSize(""), null);
+});
+
+test("shouldShowPlatformBadge shows the platform when there is no platform filter", () => {
+    const { shouldShowPlatformBadge, parseWidgetParameters, applyParsedWidgetParameters } = loadWidgetExports();
+
+    applyParsedWidgetParameters(parseWidgetParameters("station: Marienplatz"));
+
+    assert.equal(shouldShowPlatformBadge({ platform: "3" }), true);
+});
+
+test("shouldShowPlatformBadge hides the platform when the filter narrows to exactly one platform", () => {
+    const { shouldShowPlatformBadge, parseWidgetParameters, applyParsedWidgetParameters } = loadWidgetExports();
+
+    applyParsedWidgetParameters(parseWidgetParameters("station: Marienplatz; platform: 2"));
+
+    assert.equal(shouldShowPlatformBadge({ platform: "2" }), false);
+});
+
+test("shouldShowPlatformBadge still shows the platform when the filter covers multiple platforms", () => {
+    const { shouldShowPlatformBadge, parseWidgetParameters, applyParsedWidgetParameters } = loadWidgetExports();
+
+    applyParsedWidgetParameters(parseWidgetParameters("station: Marienplatz; platform: 1,2"));
+
+    assert.equal(shouldShowPlatformBadge({ platform: "1" }), true);
+});
+
+test("shouldShowPlatformBadge hides the platform when the departure has no platform info", () => {
+    const { shouldShowPlatformBadge, parseWidgetParameters, applyParsedWidgetParameters } = loadWidgetExports();
+
+    applyParsedWidgetParameters(parseWidgetParameters("station: Marienplatz"));
+
+    assert.equal(shouldShowPlatformBadge({}), false);
+    assert.equal(shouldShowPlatformBadge(null), false);
 });
 
 test("buildDeparturesFromScenario converts test fixture rows into departure objects", () => {
