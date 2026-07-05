@@ -80,10 +80,13 @@ Shows live departures for a nearby station without saving anything:
 1. Your location is used to find stations within range
    - If a **Station Types** default is configured in Settings (⚙️ Settings → Station Defaults → 🚉 Station Types), the list is restricted to those types (e.g. S-Bahn only). Leave it unset to search any nearby station.
 2. Select a station from the list
-3. A filter menu appears — set Line and/or Platform filters, or tap **Show** immediately
+3. The widget preview opens immediately with live departures (using any saved Line/Platform defaults from Settings)
+4. Once you close the preview, a filter/action menu appears:
+   - **🛤 Platform** is listed first — not every station numbers its platforms the same way, so pinning down the right platform/direction first is usually the fastest way to get to the trains you actually want
+   - **🚆 Line**, **💾 Save as Preset**, and **▶️ Show** (re-preview after changing filters) follow
    - If defaults are configured in Settings, a **Show without filters** option also appears
-   - Tap **📍 Use live location in widget** to copy the `nearest` parameter and see setup instructions
-4. The widget preview opens with live departures
+
+Tapping a live-location widget (see below) on your Home Screen follows the same pattern: the preview opens first, and the same filter/action menu (Platform first) appears once you close it.
 
 Running either flow once also grants location permission and primes the cache used by the live-location widget parameter (see below).
 

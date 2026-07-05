@@ -115,7 +115,8 @@ globalThis.__testExports = {
     applyParsedWidgetParameters,
     normalizeWidgetSize,
     buildDeparturesFromScenario,
-    shouldShowPlatformBadge
+    shouldShowPlatformBadge,
+    buildNearestStationMenuActions
 };`, context, { filename: scriptPath });
 
     return context.__testExports;
@@ -316,6 +317,47 @@ test("shouldShowPlatformBadge hides the platform when the departure has no platf
 
     assert.equal(shouldShowPlatformBadge({}), false);
     assert.equal(shouldShowPlatformBadge(null), false);
+});
+
+test("buildNearestStationMenuActions lists the Platform filter before the Line filter", () => {
+    const { buildNearestStationMenuActions } = loadWidgetExports();
+
+    const actions = buildNearestStationMenuActions("S3, S4", "1", false);
+
+    assert.equal(actions[0].id, "platform");
+    assert.equal(actions[1].id, "line");
+});
+
+test("buildNearestStationMenuActions omits 'Show without filters' when there are no saved defaults", () => {
+    const { buildNearestStationMenuActions } = loadWidgetExports();
+
+    const actions = buildNearestStationMenuActions("", "", false);
+
+    assert.equal(actions.some(a => a.id === "showNoFilters"), false);
+    assert.equal(actions[actions.length - 1].id, "show");
+});
+
+test("buildNearestStationMenuActions includes 'Show without filters' when defaults are configured", () => {
+    const { buildNearestStationMenuActions } = loadWidgetExports();
+
+    const actions = buildNearestStationMenuActions("S3", "1", true);
+
+    const showNoFiltersIndex = actions.findIndex(a => a.id === "showNoFilters");
+    const showIndex = actions.findIndex(a => a.id === "show");
+    assert.notEqual(showNoFiltersIndex, -1);
+    assert.ok(showNoFiltersIndex < showIndex);
+});
+
+test("buildNearestStationMenuActions reflects the current platform and line values in labels", () => {
+    const { buildNearestStationMenuActions } = loadWidgetExports();
+
+    const withValues = buildNearestStationMenuActions("S3, S4", "2", false);
+    assert.equal(withValues[0].label, "🛤 Platform: 2");
+    assert.equal(withValues[1].label, "🚆 Line: S3, S4");
+
+    const withoutValues = buildNearestStationMenuActions("", "", false);
+    assert.equal(withoutValues[0].label, "🛤 Platform: all");
+    assert.equal(withoutValues[1].label, "🚆 Line: all");
 });
 
 test("buildDeparturesFromScenario converts test fixture rows into departure objects", () => {

@@ -1333,9 +1333,104 @@ async function createWidget() {
 // WIZARD FLOWS
 // ============================================================================
 
+// Shows the widget preview for a resolved "nearest" station. Used both by
+// the Find Nearest Station wizard and by the filter/action menu that follows
+// it, so every preview in that flow renders identically.
+async function presentNearestPreview(stationName, lines, platform) {
+    userStation = stationName;
+    userLines = parseLineFilter(lines);
+    userPlatforms = parsePlatformFilter(platform);
+    userGradient = "black";
+
+    const previousWidgetFamily = config.widgetFamily;
+    config.widgetFamily = "large";
+    try {
+        const widget = await createWidget();
+        await widget.presentLarge();
+    } finally {
+        config.widgetFamily = previousWidgetFamily;
+    }
+}
+
+// Platform is listed first: not every station numbers its platforms the
+// same way, so figuring out the right platform/direction is usually the
+// first thing to do before narrowing down to the relevant trains by line.
+function buildNearestStationMenuActions(lines, platform, hasDefaults) {
+    const actions = [
+        { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
+        { id: "line", label: `🚆 Line: ${lines || "all"}` },
+        { id: "save", label: "💾 Save as Preset" }
+    ];
+    if (hasDefaults) actions.push({ id: "showNoFilters", label: "⏭️ Show without filters" });
+    actions.push({ id: "show", label: "▶️ Show" });
+    return actions;
+}
+
+// Interactive filter/action menu for a resolved "nearest" station, shown
+// after its preview has been closed.
+async function runNearestStationMenu({ stationName, messagePrefix, initialLines, initialPlatform }) {
+    let lines = initialLines || "";
+    let platform = initialPlatform || "";
+    const hasDefaults = !!(DEFAULT_STATION_LINES || DEFAULT_STATION_PLATFORM);
+
+    while (true) {
+        const actions = buildNearestStationMenuActions(lines, platform, hasDefaults);
+
+        const filterMenu = new Alert();
+        filterMenu.title = stationName;
+        filterMenu.message = `${messagePrefix ? messagePrefix + " " : ""}Set filters, show departures, or save as a preset.\nTap Cancel when done.`;
+        actions.forEach(a => filterMenu.addAction(a.label));
+        filterMenu.addCancelAction("Cancel");
+
+        const filterChoice = await filterMenu.presentSheet();
+        if (filterChoice === -1) return null;
+        const action = actions[filterChoice].id;
+
+        if (action === "platform") {
+            const newPlatform = await askText({
+                title: "Platform filter (optional)",
+                message: "Filter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.",
+                placeholder: "1, 2",
+                defaultValue: platform,
+                isOptional: true
+            });
+            if (newPlatform !== null) platform = newPlatform;
+        } else if (action === "line") {
+            const newLines = await askText({
+                title: "Line filter (optional)",
+                message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
+                placeholder: "S1, S2, U3",
+                defaultValue: lines,
+                isOptional: true
+            });
+            if (newLines !== null) lines = newLines;
+        } else if (action === "show") {
+            await presentNearestPreview(stationName, lines, platform);
+        } else if (action === "save") {
+            const gradient = await askGradient();
+            if (gradient === null) continue; // Colour prompt cancelled — stay in the menu.
+            const savedName = await persistPreset({
+                station: stationName,
+                lines,
+                platform,
+                gradient,
+                suggestedName: stationName
+            });
+            if (savedName) {
+                console.log(`[INFO]   - Saved preset from Find Nearest: '${savedName}'`);
+                await showPostCreateInstructions(savedName);
+                return null;
+            }
+            // Name prompt cancelled — stay in the menu.
+        } else if (action === "showNoFilters") {
+            // Preview without filters, but keep the configured defaults for next time.
+            await presentNearestPreview(stationName, "", "");
+        }
+    }
+}
+
 async function findNearestStation() {
     const mode = NEAREST_MODE.ANY;
-    const widgetToken = "nearest";
 
     // Request location permission and get current location
     Location.setAccuracyToHundredMeters();
@@ -1401,7 +1496,7 @@ async function findNearestStation() {
     // API returns stations already sorted by distance with distanceInMeters
     const nearestStations = stations.slice(0, 10);
 
-    // Prime the widget cache with the closest match so the "${widgetToken}"
+    // Prime the widget cache with the closest match so the "nearest"
     // widget parameter has a fallback when it cannot get a live GPS fix.
     const cacheCandidate = pickNearestStation(stations, mode);
     if (cacheCandidate) saveNearestCache(mode, cacheCandidate);
@@ -1430,94 +1525,20 @@ async function findNearestStation() {
         ? `${(selectedDistance / 1000).toFixed(1)} km away`
         : `${selectedDistance} m away`;
 
-    let lines = DEFAULT_STATION_LINES;
-    let platform = DEFAULT_STATION_PLATFORM;
-    const hasDefaults = !!(DEFAULT_STATION_LINES || DEFAULT_STATION_PLATFORM);
+    const lines = DEFAULT_STATION_LINES;
+    const platform = DEFAULT_STATION_PLATFORM;
 
-    const presentPreview = async (overrideLines, overridePlatform) => {
-        userStation = nearestStation;
-        userLines = parseLineFilter(overrideLines === undefined ? lines : overrideLines);
-        userPlatforms = parsePlatformFilter(overridePlatform === undefined ? platform : overridePlatform);
-        userGradient = "black";
+    // Show the selected station right away with its (possibly empty) default
+    // filter. The filter/action menu only appears once this preview is
+    // closed, so the user sees real departures before being asked anything.
+    await presentNearestPreview(nearestStation, lines, platform);
 
-        const previousWidgetFamily = config.widgetFamily;
-        config.widgetFamily = "large";
-        try {
-            const widget = await createWidget();
-            await widget.presentLarge();
-        } finally {
-            config.widgetFamily = previousWidgetFamily;
-        }
-    };
-
-    while (true) {
-        const actions = [
-            { id: "line", label: `🚆 Line: ${lines || "all"}` },
-            { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
-            { id: "save", label: "💾 Save as Preset" },
-            { id: "useInWidget", label: "📍 Use live location in widget" }
-        ];
-        if (hasDefaults) actions.push({ id: "showNoFilters", label: "⏭️ Show without filters" });
-        actions.push({ id: "show", label: "▶️ Show" });
-
-        const filterMenu = new Alert();
-        filterMenu.title = nearestStation;
-        filterMenu.message = `${distanceLabel}. Set filters, show departures, or save as a preset.\nTap Cancel when done.`;
-        actions.forEach(a => filterMenu.addAction(a.label));
-        filterMenu.addCancelAction("Cancel");
-
-        const filterChoice = await filterMenu.presentSheet();
-        if (filterChoice === -1) return null;
-        const action = actions[filterChoice].id;
-
-        if (action === "line") {
-            const newLines = await askText({
-                title: "Line filter (optional)",
-                message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
-                placeholder: "S1, S2, U3",
-                defaultValue: lines,
-                isOptional: true
-            });
-            if (newLines !== null) lines = newLines;
-        } else if (action === "platform") {
-            const newPlatform = await askText({
-                title: "Platform filter (optional)",
-                message: "Filter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.",
-                placeholder: "1, 2",
-                defaultValue: platform,
-                isOptional: true
-            });
-            if (newPlatform !== null) platform = newPlatform;
-        } else if (action === "show") {
-            await presentPreview();
-        } else if (action === "save") {
-            const gradient = await askGradient();
-            if (gradient === null) continue; // Colour prompt cancelled — stay in the menu.
-            const savedName = await persistPreset({
-                station: nearestStation,
-                lines,
-                platform,
-                gradient,
-                suggestedName: nearestStation
-            });
-            if (savedName) {
-                console.log(`[INFO]   - Saved preset from Find Nearest: '${savedName}'`);
-                await showPostCreateInstructions(savedName);
-                return null;
-            }
-            // Name prompt cancelled — stay in the menu.
-        } else if (action === "useInWidget") {
-            Pasteboard.copy(widgetToken);
-            const infoAlert = new Alert();
-            infoAlert.title = "Live location widget";
-            infoAlert.message = `Set your widget's Parameter to:\n\n${widgetToken}\n\n(copied to clipboard)\n\nThe widget will always show departures for the closest${activeTypeCodes.length > 0 ? " " + typeLabel : ""} station to your current location. If iOS can't get a location while the widget refreshes, it falls back to the last known${activeTypeCodes.length > 0 ? " " + typeLabel : ""} station.`;
-            infoAlert.addAction("OK");
-            await infoAlert.presentAlert();
-        } else if (action === "showNoFilters") {
-            // Preview without filters, but keep the configured defaults for next time.
-            await presentPreview("", "");
-        }
-    }
+    return await runNearestStationMenu({
+        stationName: nearestStation,
+        messagePrefix: `${distanceLabel}.`,
+        initialLines: lines,
+        initialPlatform: platform
+    });
 }
 
 async function promptForStationSelection() {
@@ -2235,6 +2256,17 @@ async function main() {
             default:
                 console.log('[INFO] Step 8: Presenting medium widget preview.');
                 await widget.presentMedium();
+        }
+
+        // Tapping a "nearest" widget resolves a station dynamically, just
+        // like a preset — so once this preview is closed, offer the same
+        // filter/action menu as Find Nearest Station (Platform first).
+        if (nearestMode && resolvedGlobalId) {
+            await runNearestStationMenu({
+                stationName: userStation,
+                initialLines: userLines ? userLines.join(", ") : "",
+                initialPlatform: userPlatforms ? userPlatforms.join(", ") : ""
+            });
         }
     }
 
