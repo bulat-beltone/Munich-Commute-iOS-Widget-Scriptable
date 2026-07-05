@@ -39,8 +39,7 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 
 | Action | Description |
 |--------|-------------|
-| 🔎 Find Nearest Station | Show departures for the nearest station using GPS |
-| 🚈 Find Nearest S-Bahn | Same as above, but restricted to the closest S-Bahn station |
+| 🔎 Find Nearest Station | Show departures for the nearest station using GPS (respects the **Station Types** default in Settings, if configured) |
 | ➕ Create Preset | Save a station configuration to a file for use as a widget |
 | 👀 View Preset | Preview a preset as a widget (at its saved size, or an overridden size) |
 | ✏️ Edit Preset | Edit a preset's configuration, or delete it |
@@ -75,15 +74,15 @@ Saving shows a live large-size preview of the updated preset.
 #### 👀 View Preset
 Select a preset to preview it as a widget. By default this opens at large size, but if the preset (or the widget parameter you're previewing) includes a `size:` / `widget:` / `widgetsize:` override, that size is used instead — handy for checking how a preset looks as a medium or small widget without changing your home screen.
 
-#### 🔎 Find Nearest Station / 🚈 Find Nearest S-Bahn
+#### 🔎 Find Nearest Station
 Shows live departures for a nearby station without saving anything:
 
 1. Your location is used to find stations within range
-   - **Find Nearest S-Bahn** restricts the list to stations served by the S-Bahn
+   - If a **Station Types** default is configured in Settings (⚙️ Settings → Station Defaults → 🚉 Station Types), the list is restricted to those types (e.g. S-Bahn only). Leave it unset to search any nearby station.
 2. Select a station from the list
 3. A filter menu appears — set Line and/or Platform filters, or tap **Show** immediately
    - If defaults are configured in Settings, a **Show without filters** option also appears
-   - Tap **📍 Use live location in widget** to copy the `nearest` / `nearest-sbahn` parameter and see setup instructions
+   - Tap **📍 Use live location in widget** to copy the `nearest` parameter and see setup instructions
 4. The widget preview opens with live departures
 
 Running either flow once also grants location permission and primes the cache used by the live-location widget parameter (see below).
@@ -97,18 +96,20 @@ Instead of a fixed station, you can set the widget **Parameter** to a live-locat
 | `nearest-sbahn` | Closest station served by the **S-Bahn** |
 
 How it works:
-- On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match (for `nearest-sbahn`, only stations whose transport types include `SBAHN`).
+- On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match (`nearest` respects the **Station Types** default from Settings if configured, otherwise any station; `nearest-sbahn` always restricts to stations whose transport types include `SBAHN`, regardless of that setting).
 - In this mode the header shows a 📍 location icon and the title reads **Nearest: [station]** so it's clear the station is chosen automatically.
 - The resolved station is cached. iOS heavily restricts GPS access while a widget refreshes in the background, so if a live fix isn't available the widget falls back to the **last known** nearest station instead of showing an error.
-- Run **🔎 Find Nearest Station** / **🚈 Find Nearest S-Bahn** from the app once to grant location permission and seed that cache.
-- The **Station Defaults** (Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. only show `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override them.
+- Run **🔎 Find Nearest Station** from the app once to grant location permission and seed that cache.
+- The **Station Defaults** (Station Types / Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. only search S-Bahn stops and only show `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override the line/platform default.
 - You can combine the token with a gradient in a preset file, e.g. `nearest-sbahn; gradient: blue`.
 
 #### ⚙️ Settings
 Accessible from the main menu. Changes save immediately — no Save button needed.
 
-- **Transport Types** — Toggle S-Bahn, U-Bahn, Bus, Regional Bus, Tram, Train on/off
-- **Station Defaults** — Pre-filled Line and Platform filters for Find Nearest Station
+- **Transport Types** — Toggle S-Bahn, U-Bahn, Bus, Regional Bus, Tram, Train on/off (which types of departures are fetched for a chosen station)
+- **Station Defaults** — Defaults applied when using **🔎 Find Nearest Station**:
+  - **Station Types** — Restrict the nearby-station search itself to S-Bahn / U-Bahn / Bus / Regional Bus / Tram / Train. Leave everything unchecked to search any nearby station.
+  - **Lines** / **Platform** — Pre-filled line and platform filters once a station is picked
 - **Subtract Minutes** — Subtract N minutes from all departure times (useful for walk time)
 - **Show Subtracted Minutes** — Show the "-N" offset indicator in the widget header
 

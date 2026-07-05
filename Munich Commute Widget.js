@@ -21,6 +21,17 @@ let SHOW_SUBTRACT_MINUTES = true; // Show "-X" indicator in widget header
 let DEFAULT_STATION_LINES = "";
 let DEFAULT_STATION_PLATFORM = "";
 
+// Restricts which station types "Find Nearest Station" searches for (set to
+// false/leave all false to search any nearby station regardless of type).
+const DEFAULT_STATION_TYPES = {
+    sbahn: false,
+    ubahn: false,
+    bus: false,
+    regionalBus: false,
+    tram: false,
+    train: false
+};
+
 // Transport types to display (set to false to hide a type)
 const TRANSPORT_TYPES = {
     sbahn: true,
@@ -30,6 +41,41 @@ const TRANSPORT_TYPES = {
     tram: false,
     train: false
 };
+
+// Shared mapping between the internal transport-type keys used throughout
+// Settings and the MVG API's transport type codes.
+const TRANSPORT_TYPE_API_CODES = {
+    sbahn: "SBAHN",
+    ubahn: "UBAHN",
+    bus: "BUS",
+    regionalBus: "REGIONAL_BUS",
+    tram: "TRAM",
+    train: "BAHN"
+};
+
+function getEnabledTypeCodes(typesConfig) {
+    return Object.entries(typesConfig)
+        .filter(([_, enabled]) => enabled)
+        .map(([type]) => TRANSPORT_TYPE_API_CODES[type]);
+}
+
+const TRANSPORT_TYPE_LABELS = {
+    sbahn: "S-Bahn",
+    ubahn: "U-Bahn",
+    bus: "Bus",
+    regionalBus: "Regional Bus",
+    tram: "Tram",
+    train: "Train"
+};
+
+// Human-readable summary of enabled types, e.g. "S-Bahn, Tram", or "any" when
+// none are enabled (no filter).
+function getStationTypesSummaryLabel(typesConfig) {
+    const enabledLabels = Object.entries(typesConfig)
+        .filter(([_, enabled]) => enabled)
+        .map(([type]) => TRANSPORT_TYPE_LABELS[type]);
+    return enabledLabels.length > 0 ? enabledLabels.join(", ") : "any";
+}
 
 // ============================================================================
 // ADVANCED CONFIGURATION
@@ -86,14 +132,12 @@ const MAIN_MENU_ACTION = Object.freeze({
     EDIT_SAVED_STATION: "editSavedStation",
     VIEW_SAVED_STATION: "viewSavedStation",
     FIND_NEAREST_STATION: "findNearestStation",
-    FIND_NEAREST_SBAHN: "findNearestSbahn",
     SETTINGS: "settings",
     HOW_TO_ADD_WIDGET: "howToAddWidget"
 });
 
 const MAIN_MENU_ACTIONS = Object.freeze([
     { id: MAIN_MENU_ACTION.FIND_NEAREST_STATION, label: "🔎 Find Nearest Station" },
-    { id: MAIN_MENU_ACTION.FIND_NEAREST_SBAHN, label: "🚈 Find Nearest S-Bahn" },
     { id: MAIN_MENU_ACTION.CREATE_SAVED_STATION, label: "➕ Create Preset" },
     { id: MAIN_MENU_ACTION.VIEW_SAVED_STATION, label: "👀 View Preset" },
     { id: MAIN_MENU_ACTION.EDIT_SAVED_STATION, label: "✏️ Edit Preset" },
@@ -107,11 +151,9 @@ const CANCELLED_DEPARTURE_TEXT_OPACITY = 0.30;
 const CANCELLED_DEPARTURE_MARK_COLOR = "#DB5C5C";
 const CANCELLED_DEPARTURE_MARK_SYMBOL = "xmark.circle";
 
-// Platform badge: a small rounded, translucent-white square shown at the
-// right edge of a departure row.
-const PLATFORM_BADGE_COLOR = "#FFFFFF";
-const PLATFORM_BADGE_BACKGROUND_OPACITY = 0.18;
-const PLATFORM_BADGE_CORNER_RADIUS = 4;
+// Platform badge: a small rounded square shown right next to the
+// destination name, styled the same muted white as the cancelled badge.
+const PLATFORM_BADGE_CORNER_RADIUS = 3;
 
 // ============================================================================
 // WIDGET SIZE CONFIGURATION
@@ -122,8 +164,8 @@ const WIDGET_CONFIG = {
     secondaryDepartureFontSize: 18,
     lineBadgeSize: new Size(24, 15),
     lineBadgeFont: Font.boldSystemFont(11),
-    platformBadgeSize: new Size(18, 18),
-    platformBadgeFont: Font.boldSystemFont(10),
+    platformBadgeSize: new Size(13, 13),
+    platformBadgeFont: Font.boldSystemFont(9),
     destinationFont: Font.caption2(),
     textWithOpacity: 0.5,
 
@@ -140,7 +182,7 @@ const WIDGET_CONFIG = {
     },
     large: {
         itemsCount: 6,
-        stationNameFont: Font.semiboldSystemFont(20),
+        stationNameFont: Font.semiboldSystemFont(16),
         iconSize: new Size(24, 24)
     }
 };
@@ -607,31 +649,33 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
 }
 
 function addDepartureTimeRow(parentStack, departure, index, widgetConfig, departureVisualState) {
-    // Always render the actual (real-time) arrival time in white — the
-    // planned-vs-delayed distinction is intentionally not shown.
+    // Actual (real-time) arrival time as a single "HH:MM" text — a single
+    // text layer renders the colon more cleanly than separate hour/minute
+    // layers. When delayed, the delay in minutes is shown as a small raised
+    // red "+N" next to it (top-aligned so it reads like a superscript).
     const { departureFontSize, departureFont } = getDepartureFonts(index, widgetConfig);
     const adjustedTime = getAdjustedDepartureTimestamp(departure);
     const timeRowStack = parentStack.addStack();
     timeRowStack.layoutHorizontally();
-    timeRowStack.centerAlignContent();
+    timeRowStack.topAlignContent();
 
-    const displayDate = new Date(adjustedTime);
-    const hours = displayDate.getHours().toString().padStart(2, '0');
-    const minutes = displayDate.getMinutes().toString().padStart(2, '0');
+    const mainTimeText = timeRowStack.addText(formatDepartureTime(adjustedTime));
+    mainTimeText.textColor = Color.white();
+    mainTimeText.textOpacity = departureVisualState.timeTextOpacity;
+    mainTimeText.font = departureFont;
+    mainTimeText.lineLimit = 1;
 
-    const hoursText = timeRowStack.addText(hours);
-    hoursText.textColor = Color.white();
-    hoursText.textOpacity = departureVisualState.timeTextOpacity;
-    hoursText.font = departureFont;
-    hoursText.lineLimit = 1;
+    const isDelayed = departure.delayInMinutes > 0;
+    if (isDelayed && !departure.cancelled) {
+        timeRowStack.addSpacer(2);
 
-    timeRowStack.addSpacer(index === 0 ? 2 : 1);
-
-    const minutesText = timeRowStack.addText(':' + minutes);
-    minutesText.textColor = Color.white();
-    minutesText.textOpacity = departureVisualState.timeTextOpacity;
-    minutesText.font = departureFont;
-    minutesText.lineLimit = 1;
+        const delayFontSize = Math.max(10, Math.round(departureFontSize * 0.45));
+        const delayText = timeRowStack.addText('+' + departure.delayInMinutes);
+        delayText.textColor = new Color(CANCELLED_DEPARTURE_MARK_COLOR);
+        delayText.textOpacity = departureVisualState.timeTextOpacity;
+        delayText.font = Font.boldSystemFont(delayFontSize);
+        delayText.lineLimit = 1;
+    }
 
     if (departure.cancelled) {
         addCancelledDepartureMark(timeRowStack, departureFont, departureFontSize);
@@ -639,29 +683,39 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
 }
 
 function addDepartureDestination(parentStack, departure, widgetConfig, departureVisualState) {
+    const destinationRow = parentStack.addStack();
+    destinationRow.layoutHorizontally();
+    destinationRow.centerAlignContent();
+
     // Truncate long destination names with an ellipsis instead of shrinking
     // the font — no minimumScaleFactor here, so iOS falls back to its
     // default tail-truncation for a single-line text.
-    const destinationName = parentStack.addText(departure.destination);
+    const destinationName = destinationRow.addText(departure.destination);
     destinationName.font = widgetConfig.destinationFont;
     destinationName.textColor = Color.white();
     destinationName.textOpacity = departureVisualState.destinationTextOpacity ?? widgetConfig.textWithOpacity;
     destinationName.lineLimit = 1;
+
+    if (shouldShowPlatformBadge(departure)) {
+        destinationRow.addSpacer(4);
+        addPlatformBadge(destinationRow, departure, widgetConfig, departureVisualState);
+    }
 }
 
-// Small rounded, translucent-white square at the right edge of a row,
-// showing which platform the departure uses.
+// Small rounded square shown right after the destination name, styled the
+// same muted white as the cancelled badge, showing which platform the
+// departure uses.
 function addPlatformBadge(parentStack, departure, widgetConfig, departureVisualState) {
     const badge = parentStack.addStack();
     badge.size = widgetConfig.platformBadgeSize;
     badge.centerAlignContent();
-    badge.backgroundColor = new Color(PLATFORM_BADGE_COLOR, PLATFORM_BADGE_BACKGROUND_OPACITY * departureVisualState.lineTextOpacity);
+    badge.backgroundColor = new Color(CANCELLED_DEPARTURE_LINE_COLOR, CANCELLED_DEPARTURE_LINE_BACKGROUND_OPACITY * departureVisualState.lineTextOpacity);
     badge.cornerRadius = PLATFORM_BADGE_CORNER_RADIUS;
 
     const platformText = badge.addText(String(departure.platform));
     platformText.font = widgetConfig.platformBadgeFont;
-    platformText.textColor = Color.white();
-    platformText.textOpacity = departureVisualState.lineTextOpacity;
+    platformText.textColor = new Color(CANCELLED_DEPARTURE_LINE_COLOR);
+    platformText.textOpacity = CANCELLED_DEPARTURE_TEXT_OPACITY * departureVisualState.lineTextOpacity;
     platformText.centerAlignText();
     platformText.lineLimit = 1;
     platformText.minimumScaleFactor = 0.6;
@@ -682,13 +736,6 @@ function addDepartureRowContent(rowStack, departure, index, widgetConfig) {
     addDepartureDestination(infoStack, departure, widgetConfig, departureVisualState);
 
     rowStack.addSpacer();
-
-    if (shouldShowPlatformBadge(departure)) {
-        const platformContainer = rowStack.addStack();
-        platformContainer.layoutVertically();
-        platformContainer.setPadding(index === 0 ? 5 : 3, 0, 0, 0);
-        addPlatformBadge(platformContainer, departure, widgetConfig, departureVisualState);
-    }
 }
 
 function addDepartureListRow(mainStack, departure, index, widgetConfig, isLast) {
@@ -911,18 +958,7 @@ async function getStationId(stationName) {
 }
 
 async function getDepartures(globalId) {
-    const transportTypeMapping = {
-        sbahn: "SBAHN",
-        ubahn: "UBAHN",
-        bus: "BUS",
-        regionalBus: "REGIONAL_BUS",
-        tram: "TRAM",
-        train: "BAHN"
-    };
-
-    const transportTypes = Object.entries(TRANSPORT_TYPES)
-        .filter(([_, enabled]) => enabled)
-        .map(([type]) => transportTypeMapping[type]);
+    const transportTypes = getEnabledTypeCodes(TRANSPORT_TYPES);
 
     const types = transportTypes.length > 0
         ? transportTypes.join(',')
@@ -943,21 +979,25 @@ async function getDepartures(globalId) {
 // NEAREST STATION (LIVE LOCATION)
 // ============================================================================
 
-// A station serves the S-Bahn when its transport types include "SBAHN".
+// A station matches when its transport types intersect with typeCodes.
+// An empty typeCodes list means "no filter" — any station matches.
 // The nearby endpoint uses `transportTypes`; the bundled dataset uses `products`.
-function stationServesSbahn(station) {
+function stationMatchesTypeCodes(station, typeCodes) {
+    if (!typeCodes || typeCodes.length === 0) return true;
     const types = (station && (station.transportTypes || station.products)) || [];
-    return Array.isArray(types) && types.includes("SBAHN");
+    return Array.isArray(types) && typeCodes.some(code => types.includes(code));
 }
 
-// Picks the closest station from a nearby-stations response. When mode is
-// "sbahn", only stations served by the S-Bahn are considered.
+// Picks the closest station from a nearby-stations response. In SBAHN mode,
+// only S-Bahn stations are considered; in ANY mode, the Station Types default
+// from Settings is applied (or no filter at all if none are enabled there).
 function pickNearestStation(stations, mode) {
     if (!Array.isArray(stations) || stations.length === 0) return null;
 
-    const candidates = mode === NEAREST_MODE.SBAHN
-        ? stations.filter(stationServesSbahn)
-        : stations.slice();
+    const typeCodes = mode === NEAREST_MODE.SBAHN
+        ? ["SBAHN"]
+        : getEnabledTypeCodes(DEFAULT_STATION_TYPES);
+    const candidates = stations.filter(station => stationMatchesTypeCodes(station, typeCodes));
 
     if (candidates.length === 0) return null;
 
@@ -1293,9 +1333,9 @@ async function createWidget() {
 // WIZARD FLOWS
 // ============================================================================
 
-async function findNearestStation({ sbahnOnly = false } = {}) {
-    const mode = sbahnOnly ? NEAREST_MODE.SBAHN : NEAREST_MODE.ANY;
-    const widgetToken = sbahnOnly ? "nearest-sbahn" : "nearest";
+async function findNearestStation() {
+    const mode = NEAREST_MODE.ANY;
+    const widgetToken = "nearest";
 
     // Request location permission and get current location
     Location.setAccuracyToHundredMeters();
@@ -1339,19 +1379,24 @@ async function findNearestStation({ sbahnOnly = false } = {}) {
         return null;
     }
 
-    if (sbahnOnly) {
-        stations = stations.filter(stationServesSbahn);
+    // Restrict to whatever Station Types filter is configured in Settings
+    // (empty/all-disabled means no filter — search any nearby station).
+    const activeTypeCodes = getEnabledTypeCodes(DEFAULT_STATION_TYPES);
+    const typeLabel = getStationTypesSummaryLabel(DEFAULT_STATION_TYPES);
+
+    if (activeTypeCodes.length > 0) {
+        stations = stations.filter(station => stationMatchesTypeCodes(station, activeTypeCodes));
         if (stations.length === 0) {
             const noMatchAlert = new Alert();
-            noMatchAlert.title = "No S-Bahn nearby";
-            noMatchAlert.message = "No S-Bahn stations were found near your current location.";
+            noMatchAlert.title = `No ${typeLabel} nearby`;
+            noMatchAlert.message = `No ${typeLabel} stations were found near your current location.`;
             noMatchAlert.addAction("OK");
             await noMatchAlert.presentAlert();
             return null;
         }
     }
 
-    console.log(`[INFO] Found ${stations.length} nearby ${sbahnOnly ? "S-Bahn " : ""}stations`);
+    console.log(`[INFO] Found ${stations.length} nearby ${activeTypeCodes.length > 0 ? typeLabel + " " : ""}stations`);
 
     // API returns stations already sorted by distance with distanceInMeters
     const nearestStations = stations.slice(0, 10);
@@ -1363,8 +1408,8 @@ async function findNearestStation({ sbahnOnly = false } = {}) {
 
     // Show selection alert
     const selectionAlert = new Alert();
-    selectionAlert.title = sbahnOnly ? "Select Nearest S-Bahn" : "Select Nearest Station";
-    selectionAlert.message = `Found ${nearestStations.length} ${sbahnOnly ? "S-Bahn " : ""}stations nearby:`;
+    selectionAlert.title = activeTypeCodes.length > 0 ? `Select Nearest ${typeLabel}` : "Select Nearest Station";
+    selectionAlert.message = `Found ${nearestStations.length} ${activeTypeCodes.length > 0 ? typeLabel + " " : ""}stations nearby:`;
 
     nearestStations.forEach(station => {
         const distance = station.distanceInMeters >= 1000
@@ -1410,10 +1455,10 @@ async function findNearestStation({ sbahnOnly = false } = {}) {
             { id: "line", label: `🚆 Line: ${lines || "all"}` },
             { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
             { id: "save", label: "💾 Save as Preset" },
-            { id: "useInWidget", label: "📍 Use live location in widget" },
-            { id: "show", label: "▶️ Show" }
+            { id: "useInWidget", label: "📍 Use live location in widget" }
         ];
-        if (hasDefaults) actions.push({ id: "showNoFilters", label: "▶️ Show without filters" });
+        if (hasDefaults) actions.push({ id: "showNoFilters", label: "⏭️ Show without filters" });
+        actions.push({ id: "show", label: "▶️ Show" });
 
         const filterMenu = new Alert();
         filterMenu.title = nearestStation;
@@ -1465,7 +1510,7 @@ async function findNearestStation({ sbahnOnly = false } = {}) {
             Pasteboard.copy(widgetToken);
             const infoAlert = new Alert();
             infoAlert.title = "Live location widget";
-            infoAlert.message = `Set your widget's Parameter to:\n\n${widgetToken}\n\n(copied to clipboard)\n\nThe widget will always show departures for the ${sbahnOnly ? "closest S-Bahn station" : "closest station"} to your current location. If iOS can't get a location while the widget refreshes, it falls back to the last known ${sbahnOnly ? "S-Bahn " : ""}station.`;
+            infoAlert.message = `Set your widget's Parameter to:\n\n${widgetToken}\n\n(copied to clipboard)\n\nThe widget will always show departures for the closest${activeTypeCodes.length > 0 ? " " + typeLabel : ""} station to your current location. If iOS can't get a location while the widget refreshes, it falls back to the last known${activeTypeCodes.length > 0 ? " " + typeLabel : ""} station.`;
             infoAlert.addAction("OK");
             await infoAlert.presentAlert();
         } else if (action === "showNoFilters") {
@@ -1748,8 +1793,8 @@ async function editSavedStation() {
         editMenu.addAction(`🚆 Lines: ${lines || "all"}`);
         editMenu.addAction(`🛤 Platform: ${platform || "all"}`);
         editMenu.addAction(`🎨 Gradient: ${gradient}`);
-        editMenu.addAction(`🧪 Test data: ${testDataFile || "—"}`);
         editMenu.addAction(`📝 Name: ${profileName}`);
+        editMenu.addAction("📋 Copy Preset Name");
         editMenu.addDestructiveAction("🗑️ Delete Preset");
         editMenu.addAction("✅ Save");
         editMenu.addCancelAction("Cancel");
@@ -1795,16 +1840,6 @@ async function editSavedStation() {
             if (newGradient === null) return null;
             gradient = newGradient;
         } else if (fieldChoice === 4) {
-            const testInput = await askText({
-                title: "Test data file (optional)",
-                message: "JSON filename in Munich Commute/TestData/.\nLeave empty for live API data.",
-                placeholder: testDataFile || "on-time-mix.json",
-                defaultValue: testDataFile,
-                isOptional: true
-            });
-            if (testInput === null) return null;
-            testDataFile = testInput;
-        } else if (fieldChoice === 5) {
             const nameInput = await askText({
                 title: "Preset name",
                 message: "Change the name or press Continue to keep it.",
@@ -1813,6 +1848,8 @@ async function editSavedStation() {
             });
             if (nameInput === null) return null;
             profileName = sanitizeProfileName(nameInput) || profileName;
+        } else if (fieldChoice === 5) {
+            Pasteboard.copy(profileName);
         } else if (fieldChoice === 6) {
             // Destructive "Delete Preset" action (added before "Save", so it is index 6).
             const deleted = await confirmAndDeletePreset(profileDirectory, profileName);
@@ -1908,6 +1945,7 @@ function loadSettings() {
     try {
         const saved = JSON.parse(fileManager.readString(settingsPath));
         if (saved.transportTypes) Object.assign(TRANSPORT_TYPES, saved.transportTypes);
+        if (saved.defaultStationTypes) Object.assign(DEFAULT_STATION_TYPES, saved.defaultStationTypes);
         if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
         if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
         if (typeof saved.defaultStationLines === "string") DEFAULT_STATION_LINES = saved.defaultStationLines;
@@ -1922,6 +1960,7 @@ function saveSettings() {
     const settingsPath = fileManager.joinPath(ensureAppDirectory(), SETTINGS_FILE_NAME);
     fileManager.writeString(settingsPath, JSON.stringify({
         transportTypes: { ...TRANSPORT_TYPES },
+        defaultStationTypes: { ...DEFAULT_STATION_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
         showSubtractMinutes: SHOW_SUBTRACT_MINUTES,
         defaultStationLines: DEFAULT_STATION_LINES,
@@ -1965,9 +2004,10 @@ async function showSettingsTransportTypes() {
 async function showSettingsStationDefaults() {
     while (true) {
         const actions = [
-            { id: "lines",    label: `🚆 Lines: ${DEFAULT_STATION_LINES || "all"}` },
-            { id: "platform", label: `🛤 Platform: ${DEFAULT_STATION_PLATFORM || "all"}` },
-            { id: "back",     label: "← Back" },
+            { id: "stationTypes", label: `🚉 Station Types: ${getStationTypesSummaryLabel(DEFAULT_STATION_TYPES)}` },
+            { id: "lines",        label: `🚆 Lines: ${DEFAULT_STATION_LINES || "all"}` },
+            { id: "platform",     label: `🛤 Platform: ${DEFAULT_STATION_PLATFORM || "all"}` },
+            { id: "back",         label: "← Back" },
         ];
         const menu = new Alert();
         menu.title = "Station Defaults";
@@ -1980,7 +2020,9 @@ async function showSettingsStationDefaults() {
         const action = actions[idx].id;
         if (action === "back") return;
 
-        if (action === "lines") {
+        if (action === "stationTypes") {
+            await showSettingsStationTypes();
+        } else if (action === "lines") {
             const input = await askText({
                 title: "Default Lines",
                 message: "Lines to pre-fill when using Find Nearest Station (comma-separated).\nLeave empty for no default.",
@@ -1990,6 +2032,7 @@ async function showSettingsStationDefaults() {
             });
             if (input === null) return;
             DEFAULT_STATION_LINES = input;
+            saveSettings();
         } else if (action === "platform") {
             const input = await askText({
                 title: "Default Platform",
@@ -2000,7 +2043,41 @@ async function showSettingsStationDefaults() {
             });
             if (input === null) return;
             DEFAULT_STATION_PLATFORM = input;
+            saveSettings();
         }
+    }
+}
+
+// Restricts which station types "Find Nearest Station" searches for. Leaving
+// everything unchecked means no filter — search any nearby station.
+async function showSettingsStationTypes() {
+    while (true) {
+        const actions = [
+            { id: "sbahn",       label: `🚇 S-Bahn: ${DEFAULT_STATION_TYPES.sbahn ? "✅" : "❌"}` },
+            { id: "ubahn",       label: `🚇 U-Bahn: ${DEFAULT_STATION_TYPES.ubahn ? "✅" : "❌"}` },
+            { id: "bus",         label: `🚌 Bus: ${DEFAULT_STATION_TYPES.bus ? "✅" : "❌"}` },
+            { id: "regionalBus", label: `🚌 Regional Bus: ${DEFAULT_STATION_TYPES.regionalBus ? "✅" : "❌"}` },
+            { id: "tram",        label: `🚊 Tram: ${DEFAULT_STATION_TYPES.tram ? "✅" : "❌"}` },
+            { id: "train",       label: `🚂 Train: ${DEFAULT_STATION_TYPES.train ? "✅" : "❌"}` },
+            { id: "back",        label: "← Back" },
+        ];
+        const menu = new Alert();
+        menu.title = "Station Types";
+        menu.message = "Restrict Find Nearest Station to these types.\nLeave all unchecked to search any station.";
+        actions.forEach(a => menu.addAction(a.label));
+        menu.addCancelAction("Cancel");
+
+        const idx = await menu.presentSheet();
+        if (idx === -1) return;
+        const action = actions[idx].id;
+        if (action === "back") return;
+
+        if (action === "sbahn") DEFAULT_STATION_TYPES.sbahn = !DEFAULT_STATION_TYPES.sbahn;
+        else if (action === "ubahn") DEFAULT_STATION_TYPES.ubahn = !DEFAULT_STATION_TYPES.ubahn;
+        else if (action === "bus") DEFAULT_STATION_TYPES.bus = !DEFAULT_STATION_TYPES.bus;
+        else if (action === "regionalBus") DEFAULT_STATION_TYPES.regionalBus = !DEFAULT_STATION_TYPES.regionalBus;
+        else if (action === "tram") DEFAULT_STATION_TYPES.tram = !DEFAULT_STATION_TYPES.tram;
+        else if (action === "train") DEFAULT_STATION_TYPES.train = !DEFAULT_STATION_TYPES.train;
         saveSettings();
     }
 }
@@ -2008,8 +2085,8 @@ async function showSettingsStationDefaults() {
 async function showSettings() {
     while (true) {
         const actions = [
-            { id: "transportTypes",   label: "🚇 Transport Types →" },
             { id: "stationDefaults",  label: "🚉 Station Defaults →" },
+            { id: "transportTypes",   label: "🚇 Transport Types →" },
             { id: "subtractMinutes",  label: `⏱ Subtract Minutes: ${SUBTRACT_MINUTES}` },
             { id: "showSubtractMins", label: `👁 Show Subtracted Minutes: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}` },
         ];
@@ -2121,13 +2198,10 @@ async function main() {
             }
             return;
         } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_STATION) {
-            // Find Nearest Station - wizard with geolocation.
+            // Find Nearest Station - wizard with geolocation. Respects the
+            // Station Types default from Settings (any station if unset).
             // Handles its own preview loop and optional save, so nothing to render afterwards.
             await findNearestStation();
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_SBAHN) {
-            // Find Nearest S-Bahn - same wizard, restricted to S-Bahn stations.
-            await findNearestStation({ sbahnOnly: true });
             return;
         } else if (menuAction === MAIN_MENU_ACTION.SETTINGS) {
             await showSettings();

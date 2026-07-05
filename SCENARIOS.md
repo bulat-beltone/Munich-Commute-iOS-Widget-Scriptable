@@ -76,25 +76,25 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ---
 
-## 5a. Finding the Nearest S-Bahn
+## 5a. Station Types Default (Settings → Station Defaults)
 
-**Scenario:** user only cares about the S-Bahn and wants the closest S-Bahn station, not the closest bus/tram stop.
+**Scenario:** a user (e.g. someone who only ever rides the S-Bahn) wants `🔎 Find Nearest Station` to always narrow results to their preferred station type(s). A public/first-time user with no configured default should still get "any nearby station" behavior. There is no dedicated "Find Nearest S-Bahn" menu item — this setting is the only way to bias the search, keeping the main menu short.
 
-- [ ] `🚈 Find Nearest S-Bahn` filters the nearby list to stations served by the S-Bahn
-- [ ] Graceful message when no S-Bahn station is nearby
-- [ ] `📍 Use live location in widget` copies the `nearest-sbahn` token and shows setup instructions
-- [ ] Running the flow primes the nearest-station cache used by the widget
+- [ ] Settings → Station Defaults → `🚉 Station Types` opens a toggle list: S-Bahn / U-Bahn / Bus / Regional Bus / Tram / Train
+- [ ] All types unchecked (default) → `Find Nearest Station` and the `nearest` live-location token search **any** nearby station, unfiltered
+- [ ] One or more types checked → results (and the graceful "no station nearby" message) are restricted to those types
+- [ ] Setting persists in `Settings.json` (`defaultStationTypes`)
 
-**Status:** ✅ `findNearestStation({ sbahnOnly: true })` reusing the shared preview loop.
+**Status:** ✅ `DEFAULT_STATION_TYPES`, `stationMatchesTypeCodes`, `showSettingsStationTypes`. Reuses the same transport-type codes as the (separate, departure-filtering) Transport Types setting.
 
 ---
 
 ## 5b. Live-location Widget (`nearest` / `nearest-sbahn`)
 
-**Scenario:** user sets the widget parameter to `nearest` or `nearest-sbahn` so it always tracks the closest station to their current location.
+**Scenario:** user sets the widget parameter to `nearest` or `nearest-sbahn` so it always tracks the closest station to their current location. `nearest-sbahn` is a legacy token — it's no longer produced by the app's menu (there's no "Find Nearest S-Bahn" entry any more) but is still recognized for backward compatibility with widgets that already have it configured.
 
-- [ ] `nearest` resolves the closest station of any type
-- [ ] `nearest-sbahn` resolves the closest station whose transport types include `SBAHN`
+- [ ] `nearest` resolves the closest station matching the Station Types default from Settings (any station if none configured)
+- [ ] `nearest-sbahn` resolves the closest station whose transport types include `SBAHN`, regardless of the Station Types default
 - [ ] Live GPS fix is used when available and the result is cached
 - [ ] When iOS denies a background GPS fix, the widget falls back to the cached station instead of erroring
 - [ ] With neither location nor cache, a styled "location unavailable" screen is shown

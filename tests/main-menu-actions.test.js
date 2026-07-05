@@ -107,7 +107,7 @@ globalThis.__testExports = {
     MAIN_MENU_ACTION,
     getMainMenuActionForIndex,
     getDepartureVisualState,
-    stationServesSbahn,
+    stationMatchesTypeCodes,
     pickNearestStation,
     NEAREST_MODE,
     NEAREST_TOKENS,
@@ -161,23 +161,30 @@ test("non-cancelled departures render at full opacity with no dimming", () => {
     assert.equal(state.destinationTextOpacity, null);
 });
 
-test("main menu maps the visible Find Nearest S-Bahn action to its id", () => {
-    const { MAIN_MENU_ACTIONS, MAIN_MENU_ACTION, getMainMenuActionForIndex } = loadWidgetExports();
+test("main menu no longer exposes a dedicated Find Nearest S-Bahn action", () => {
+    const { MAIN_MENU_ACTIONS, MAIN_MENU_ACTION } = loadWidgetExports();
 
     const index = MAIN_MENU_ACTIONS.findIndex(action => action.label.includes("Find Nearest S-Bahn"));
 
-    assert.notEqual(index, -1);
-    assert.equal(getMainMenuActionForIndex(index), MAIN_MENU_ACTION.FIND_NEAREST_SBAHN);
+    assert.equal(index, -1);
+    assert.equal(MAIN_MENU_ACTION.FIND_NEAREST_SBAHN, undefined);
 });
 
-test("stationServesSbahn detects the S-Bahn from either transportTypes or products", () => {
-    const { stationServesSbahn } = loadWidgetExports();
+test("stationMatchesTypeCodes detects a match from either transportTypes or products", () => {
+    const { stationMatchesTypeCodes } = loadWidgetExports();
 
-    assert.equal(stationServesSbahn({ transportTypes: ["SBAHN", "UBAHN"] }), true);
-    assert.equal(stationServesSbahn({ products: ["SBAHN"] }), true);
-    assert.equal(stationServesSbahn({ transportTypes: ["UBAHN", "BUS"] }), false);
-    assert.equal(stationServesSbahn({}), false);
-    assert.equal(stationServesSbahn(null), false);
+    assert.equal(stationMatchesTypeCodes({ transportTypes: ["SBAHN", "UBAHN"] }, ["SBAHN"]), true);
+    assert.equal(stationMatchesTypeCodes({ products: ["SBAHN"] }, ["SBAHN"]), true);
+    assert.equal(stationMatchesTypeCodes({ transportTypes: ["UBAHN", "BUS"] }, ["SBAHN"]), false);
+    assert.equal(stationMatchesTypeCodes({}, ["SBAHN"]), false);
+    assert.equal(stationMatchesTypeCodes(null, ["SBAHN"]), false);
+});
+
+test("stationMatchesTypeCodes treats an empty type list as no filter", () => {
+    const { stationMatchesTypeCodes } = loadWidgetExports();
+
+    assert.equal(stationMatchesTypeCodes({ transportTypes: ["BUS"] }, []), true);
+    assert.equal(stationMatchesTypeCodes(null, []), true);
 });
 
 test("pickNearestStation returns the closest station of any type", () => {
