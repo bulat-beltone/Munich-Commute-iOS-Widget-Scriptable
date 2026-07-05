@@ -168,6 +168,7 @@ const WIDGET_CONFIG = {
     platformBadgeFont: Font.boldSystemFont(10),
     destinationFont: Font.caption2(),
     textWithOpacity: 0.5,
+    delayFont: Font.boldSystemFont(12),
 
     small: {
         itemsCount: 2,
@@ -183,7 +184,7 @@ const WIDGET_CONFIG = {
     large: {
         itemsCount: 6,
         stationNameFont: Font.semiboldSystemFont(16),
-        iconSize: new Size(24, 24)
+        iconSize: new Size(16, 16)
     }
 };
 
@@ -668,12 +669,11 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
     const isDelayed = departure.delayInMinutes > 0;
     if (isDelayed && !departure.cancelled) {
         timeRowStack.addSpacer(2);
-
-        const delayFontSize = Math.max(10, Math.round(departureFontSize * 0.65));
+        
         const delayText = timeRowStack.addText('+' + departure.delayInMinutes);
         delayText.textColor = new Color(CANCELLED_DEPARTURE_MARK_COLOR);
         delayText.textOpacity = departureVisualState.timeTextOpacity;
-        delayText.font = Font.boldSystemFont(delayFontSize);
+        delayText.font = widgetConfig.delayFont;
         delayText.lineLimit = 1;
     }
 
