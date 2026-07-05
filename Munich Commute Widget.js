@@ -759,7 +759,7 @@ function addDepartureGrid(mainStack, departures, widgetConfig) {
 
         const rowStack = mainStack.addStack();
         rowStack.layoutHorizontally();
-        rowStack.topAlignContent();
+        rowStack.centerAlignContent();
 
         for (let col = 0; col < columns; col++) {
             const itemIndex = col * numRows + row;
