@@ -165,7 +165,7 @@ const WIDGET_CONFIG = {
     lineBadgeSize: new Size(24, 15),
     lineBadgeFont: Font.boldSystemFont(11),
     platformBadgeSize: new Size(13, 13),
-    platformBadgeFont: Font.boldSystemFont(9),
+    platformBadgeFont: Font.boldSystemFont(10),
     destinationFont: Font.caption2(),
     textWithOpacity: 0.5,
 
