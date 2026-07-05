@@ -669,7 +669,7 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
     if (isDelayed && !departure.cancelled) {
         timeRowStack.addSpacer(2);
 
-        const delayFontSize = Math.max(10, Math.round(departureFontSize * 0.45));
+        const delayFontSize = Math.max(10, Math.round(departureFontSize * 0.65));
         const delayText = timeRowStack.addText('+' + departure.delayInMinutes);
         delayText.textColor = new Color(CANCELLED_DEPARTURE_MARK_COLOR);
         delayText.textOpacity = departureVisualState.timeTextOpacity;
