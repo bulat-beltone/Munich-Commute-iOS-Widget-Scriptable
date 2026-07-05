@@ -85,7 +85,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] One or more types checked → results (and the graceful "no station nearby" message) are restricted to those types
 - [ ] Setting persists in `Settings.json` (`defaultStationTypes`)
 
-**Status:** ✅ `DEFAULT_STATION_TYPES`, `stationMatchesTypeCodes`, `showSettingsStationTypes`. Reuses the same transport-type codes as the (separate, departure-filtering) Transport Types setting.
+**Status:** ✅ `DEFAULT_STATION_TYPES`, `stationMatchesTypeCodes`, `showSettingsStationTypes`. Reuses the same transport-type codes as the (separate, departure-filtering) `TRANSPORT_TYPES` code constant — no longer exposed in the Settings UI, edit it directly in the script's User Configuration section.
 
 ---
 

@@ -1965,7 +1965,6 @@ function loadSettings() {
     if (!fileManager.fileExists(settingsPath)) return;
     try {
         const saved = JSON.parse(fileManager.readString(settingsPath));
-        if (saved.transportTypes) Object.assign(TRANSPORT_TYPES, saved.transportTypes);
         if (saved.defaultStationTypes) Object.assign(DEFAULT_STATION_TYPES, saved.defaultStationTypes);
         if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
         if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
@@ -1980,46 +1979,12 @@ function saveSettings() {
     const fileManager = FileManager.iCloud();
     const settingsPath = fileManager.joinPath(ensureAppDirectory(), SETTINGS_FILE_NAME);
     fileManager.writeString(settingsPath, JSON.stringify({
-        transportTypes: { ...TRANSPORT_TYPES },
         defaultStationTypes: { ...DEFAULT_STATION_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
         showSubtractMinutes: SHOW_SUBTRACT_MINUTES,
         defaultStationLines: DEFAULT_STATION_LINES,
         defaultStationPlatform: DEFAULT_STATION_PLATFORM
     }, null, 2));
-}
-
-
-async function showSettingsTransportTypes() {
-    while (true) {
-        const actions = [
-            { id: "sbahn",       label: `🚇 S-Bahn: ${TRANSPORT_TYPES.sbahn ? "✅" : "❌"}` },
-            { id: "ubahn",       label: `🚇 U-Bahn: ${TRANSPORT_TYPES.ubahn ? "✅" : "❌"}` },
-            { id: "bus",         label: `🚌 Bus: ${TRANSPORT_TYPES.bus ? "✅" : "❌"}` },
-            { id: "regionalBus", label: `🚌 Regional Bus: ${TRANSPORT_TYPES.regionalBus ? "✅" : "❌"}` },
-            { id: "tram",        label: `🚊 Tram: ${TRANSPORT_TYPES.tram ? "✅" : "❌"}` },
-            { id: "train",       label: `🚂 Train: ${TRANSPORT_TYPES.train ? "✅" : "❌"}` },
-            { id: "back",        label: "← Back" },
-        ];
-        const menu = new Alert();
-        menu.title = "Transport Types";
-        menu.message = "Tap to toggle each transport type.";
-        actions.forEach(a => menu.addAction(a.label));
-        menu.addCancelAction("Cancel");
-
-        const idx = await menu.presentSheet();
-        if (idx === -1) return;
-        const action = actions[idx].id;
-        if (action === "back") return;
-
-        if (action === "sbahn") TRANSPORT_TYPES.sbahn = !TRANSPORT_TYPES.sbahn;
-        else if (action === "ubahn") TRANSPORT_TYPES.ubahn = !TRANSPORT_TYPES.ubahn;
-        else if (action === "bus") TRANSPORT_TYPES.bus = !TRANSPORT_TYPES.bus;
-        else if (action === "regionalBus") TRANSPORT_TYPES.regionalBus = !TRANSPORT_TYPES.regionalBus;
-        else if (action === "tram") TRANSPORT_TYPES.tram = !TRANSPORT_TYPES.tram;
-        else if (action === "train") TRANSPORT_TYPES.train = !TRANSPORT_TYPES.train;
-        saveSettings();
-    }
 }
 
 async function showSettingsStationDefaults() {
@@ -2107,7 +2072,6 @@ async function showSettings() {
     while (true) {
         const actions = [
             { id: "stationDefaults",  label: "🚉 Station Defaults →" },
-            { id: "transportTypes",   label: "🚇 Transport Types →" },
             { id: "subtractMinutes",  label: `⏱ Subtract Minutes: ${SUBTRACT_MINUTES}` },
             { id: "showSubtractMins", label: `👁 Show Subtracted Minutes: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}` },
         ];
@@ -2121,9 +2085,7 @@ async function showSettings() {
         if (idx === -1) return;
         const action = actions[idx].id;
 
-        if (action === "transportTypes") {
-            await showSettingsTransportTypes();
-        } else if (action === "stationDefaults") {
+        if (action === "stationDefaults") {
             await showSettingsStationDefaults();
         } else if (action === "subtractMinutes") {
             const input = await askText({

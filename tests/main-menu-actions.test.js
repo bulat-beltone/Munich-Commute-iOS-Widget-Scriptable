@@ -360,6 +360,15 @@ test("buildNearestStationMenuActions reflects the current platform and line valu
     assert.equal(withoutValues[1].label, "🚆 Line: all");
 });
 
+test("Settings menu no longer exposes a Transport Types entry", () => {
+    const source = fs.readFileSync(scriptPath, "utf8");
+    const settingsMenuMatch = source.match(/async function showSettings\(\) \{[\s\S]*?\n\}/);
+
+    assert.ok(settingsMenuMatch, "showSettings function not found");
+    assert.equal(/Transport Types/.test(settingsMenuMatch[0]), false);
+    assert.equal(/showSettingsTransportTypes/.test(source), false);
+});
+
 test("buildDeparturesFromScenario converts test fixture rows into departure objects", () => {
     const { buildDeparturesFromScenario } = loadWidgetExports();
 

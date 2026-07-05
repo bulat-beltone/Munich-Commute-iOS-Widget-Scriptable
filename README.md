@@ -109,7 +109,6 @@ How it works:
 #### ⚙️ Settings
 Accessible from the main menu. Changes save immediately — no Save button needed.
 
-- **Transport Types** — Toggle S-Bahn, U-Bahn, Bus, Regional Bus, Tram, Train on/off (which types of departures are fetched for a chosen station)
 - **Station Defaults** — Defaults applied when using **🔎 Find Nearest Station**:
   - **Station Types** — Restrict the nearby-station search itself to S-Bahn / U-Bahn / Bus / Regional Bus / Tram / Train. Leave everything unchecked to search any nearby station.
   - **Lines** / **Platform** — Pre-filled line and platform filters once a station is picked
