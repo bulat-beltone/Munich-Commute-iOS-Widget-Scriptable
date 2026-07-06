@@ -578,6 +578,19 @@ function getPreviewWidgetSize() {
     return userPreviewWidgetSize || "large";
 }
 
+// Renders the widget at the given size and presents it, restoring the previous
+// widget family afterwards. Used by every in-app preview flow.
+async function previewWidget(size = "large") {
+    const previousWidgetFamily = config.widgetFamily;
+    config.widgetFamily = size;
+    try {
+        const widget = await createWidget();
+        await presentWidgetPreview(widget, size);
+    } finally {
+        config.widgetFamily = previousWidgetFamily;
+    }
+}
+
 function getAdjustedDepartureTimestamp(departure) {
     let recalculatedTime = departure.realtimeDepartureTime;
     if (typeof recalculatedTime !== 'number' && typeof departure.plannedDepartureTime === 'number' && typeof departure.delayInMinutes === 'number') {
@@ -1354,14 +1367,7 @@ async function presentNearestPreview(stationName, lines, platform) {
     userPlatforms = parsePlatformFilter(platform);
     userGradient = "black";
 
-    const previousWidgetFamily = config.widgetFamily;
-    config.widgetFamily = "large";
-    try {
-        const widget = await createWidget();
-        await widget.presentLarge();
-    } finally {
-        config.widgetFamily = previousWidgetFamily;
-    }
+    await previewWidget("large");
 }
 
 // Platform is listed first: not every station numbers its platforms the
@@ -1674,14 +1680,7 @@ async function createSavedStation() {
     userLines = parseLineFilter(lines);
     if (CONFIG.gradients[gradient]) userGradient = gradient;
 
-    const previousWidgetFamily = config.widgetFamily;
-    config.widgetFamily = "large";
-    try {
-        const widget = await createWidget();
-        await widget.presentLarge();
-    } finally {
-        config.widgetFamily = previousWidgetFamily;
-    }
+    await previewWidget("large");
 
     return profileName;
 }
@@ -1696,16 +1695,7 @@ async function viewSavedStation() {
     const selectedParameterString = resolveWidgetParameter(profileName);
     applyParsedWidgetParameters(parseWidgetParameters(selectedParameterString));
 
-    const previewSize = getPreviewWidgetSize();
-    const previousWidgetFamily = config.widgetFamily;
-    config.widgetFamily = previewSize;
-
-    try {
-        const widget = await createWidget();
-        await presentWidgetPreview(widget, previewSize);
-    } finally {
-        config.widgetFamily = previousWidgetFamily;
-    }
+    await previewWidget(getPreviewWidgetSize());
 
     return true;
 }
@@ -1820,14 +1810,7 @@ async function editSavedStation() {
     // Show widget preview directly
     applyParsedWidgetParameters(parseWidgetParameters(parameterString));
 
-    const previousWidgetFamily = config.widgetFamily;
-    config.widgetFamily = "large";
-    try {
-        const widget = await createWidget();
-        await widget.presentLarge();
-    } finally {
-        config.widgetFamily = previousWidgetFamily;
-    }
+    await previewWidget("large");
 
     return profileName;
 }
