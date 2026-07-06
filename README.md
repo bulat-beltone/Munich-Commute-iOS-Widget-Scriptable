@@ -13,7 +13,7 @@ Works based on Scriptable app.
 - **Platform badge** — a small rounded, translucent-white square shows which platform each departure uses; hidden only when your filter already narrows things down to a single platform
 - **Cancelled departures** remain visible with a subtle ❌ mark, dimmed line badge, time, and destination text
 - **Test data preview** — preview any widget size with fixture departures, without hitting the live API
-- **Customizable colors**
+- **Customizable colors**, including a **suggested line-matched color** when a preset filters down to a single S-Bahn line (e.g. filtering to just `S3` suggests a gradient built from S3's own color). U-Bahn, Bus, and Tram are planned for a future update.
 
 Color options:
 - grey
@@ -22,6 +22,7 @@ Color options:
 - green
 - purple
 - teal
+- one line-matched gradient per S-Bahn line (`s1`, `s2`, `s3`, `s4`, `s5`, `s6`, `s7`, `s8`, `s20`) — suggested automatically, or selectable manually
 
 ## Installation
 
@@ -190,6 +191,20 @@ Choose from available gradients:
 - `green`
 - `purple`
 - `teal`
+
+Or match a single S-Bahn line's own color, e.g. `gradient: s3`. These are generated from each line's badge color using the same lightness/saturation recipe as the gradients above, so they fit the same visual style. When a preset's line filter narrows down to exactly one S-Bahn line, the color picker suggests this automatically — but you can also set it manually, or combine it with a different line filter.
+
+| Line | Gradient key |
+|------|--------------|
+| S1 | `s1` |
+| S2 | `s2` |
+| S3 | `s3` |
+| S4 | `s4` |
+| S5 | `s5` |
+| S6 | `s6` |
+| S7 | `s7` |
+| S8 | `s8` |
+| S20 | `s20` |
 
 #### Presets
 You can provide a **preset name** as the widget parameter (without `:`). The script will then load the preset.

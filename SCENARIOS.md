@@ -26,12 +26,13 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] Line filter (optional)
 - [ ] Platform filter (optional)
 - [ ] Choose colour (gradient)
+- [ ] Filtering to a single S-Bahn line (e.g. `S3`) surfaces a "Match S3" suggested gradient built from that line's own color
 - [ ] Preset name → name copied to clipboard
 - [ ] Widget preview shown
 - [ ] "Add to Home Screen" instructions shown
 - [ ] Widget added to home screen with the preset name as the parameter
 
-**Status:** ✅ `createSavedStation` wizard + `getPostCreateInstructions`.
+**Status:** ✅ `createSavedStation` wizard + `getPostCreateInstructions`. Line-matched gradient suggestion via `getSbahnLineGradientSuggestion` (S-Bahn only for now; U-Bahn/Bus/Tram planned).
 
 ---
 
@@ -163,6 +164,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 - [ ] `✏️ Edit Preset`: select a preset
 - [ ] Edit individual fields (station, lines, platform, gradient, test data, name)
+- [ ] Editing the gradient reflects the current line filter — if it narrows to a single S-Bahn line, the "Match <line>" suggestion appears (marked "(current)" if that gradient is already saved)
 - [ ] Duplicate name protection
 - [ ] Preview shown after saving
 

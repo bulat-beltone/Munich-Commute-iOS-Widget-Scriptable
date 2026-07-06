@@ -236,6 +236,123 @@ const LINE_COLORS = {
 };
 
 // ============================================================================
+// LINE-MATCHED GRADIENTS
+// ============================================================================
+// Generates a background gradient for each line using the exact same
+// lightness/saturation "recipe" as the hand-picked accent gradients above
+// (red, blue, green, purple, teal): a top tone at 39% saturation / 20%
+// lightness and a darker, richer bottom tone at 46% saturation / 8%
+// lightness — only the hue changes, taken straight from the line's own
+// badge color. That's what lets a "Match S3" suggestion look and feel like
+// it belongs in the same palette as the manually curated gradients.
+//
+// S-Bahn only for now; U-Bahn, Bus, and Tram can reuse the same helpers
+// later.
+
+function hexToRgbChannels(hex) {
+    const clean = hex.replace("#", "");
+    return [
+        parseInt(clean.substring(0, 2), 16),
+        parseInt(clean.substring(2, 4), 16),
+        parseInt(clean.substring(4, 6), 16)
+    ];
+}
+
+function rgbToHueDegrees(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (delta === 0) return 0;
+
+    let hue;
+    if (max === r) hue = ((g - b) / delta) % 6;
+    else if (max === g) hue = (b - r) / delta + 2;
+    else hue = (r - g) / delta + 4;
+
+    hue *= 60;
+    return hue < 0 ? hue + 360 : hue;
+}
+
+function hslToHex(hue, saturationPercent, lightnessPercent) {
+    const s = saturationPercent / 100;
+    const l = lightnessPercent / 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+    const m = l - c / 2;
+
+    let r, g, b;
+    if (hue < 60) [r, g, b] = [c, x, 0];
+    else if (hue < 120) [r, g, b] = [x, c, 0];
+    else if (hue < 180) [r, g, b] = [0, c, x];
+    else if (hue < 240) [r, g, b] = [0, x, c];
+    else if (hue < 300) [r, g, b] = [x, 0, c];
+    else [r, g, b] = [c, 0, x];
+
+    const toHex = channel => Math.round((channel + m) * 255).toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+const LINE_GRADIENT_RECIPE = {
+    topSaturation: 39,
+    topLightness: 20,
+    bottomSaturation: 46,
+    bottomLightness: 8
+};
+
+function buildLineGradient(hexColor) {
+    const [r, g, b] = hexToRgbChannels(hexColor);
+    const hue = rgbToHueDegrees(r, g, b);
+    return {
+        top: hslToHex(hue, LINE_GRADIENT_RECIPE.topSaturation, LINE_GRADIENT_RECIPE.topLightness),
+        bottom: hslToHex(hue, LINE_GRADIENT_RECIPE.bottomSaturation, LINE_GRADIENT_RECIPE.bottomLightness)
+    };
+}
+
+// The gradient config key used for a given line, e.g. "S3" -> "s3".
+function lineGradientName(line) {
+    return line.toLowerCase();
+}
+
+// S8's own badge "color" is a translucent white overlay, not a real hue —
+// its line-matched gradient is generated from its yellow accent text color
+// instead, since that's the color that actually reads as "S8" to a rider.
+const SBAHN_GRADIENT_SOURCE_COLORS = {
+    S1: LINE_COLORS.SBAHN.S1,
+    S2: LINE_COLORS.SBAHN.S2,
+    S3: LINE_COLORS.SBAHN.S3,
+    S4: LINE_COLORS.SBAHN.S4,
+    S5: LINE_COLORS.SBAHN.S5,
+    S6: LINE_COLORS.SBAHN.S6,
+    S7: LINE_COLORS.SBAHN.S7,
+    S8: LINE_COLORS.SBAHN.S8_fg,
+    S20: LINE_COLORS.SBAHN.S20
+};
+
+for (const [line, hexColor] of Object.entries(SBAHN_GRADIENT_SOURCE_COLORS)) {
+    CONFIG.gradients[lineGradientName(line)] = buildLineGradient(hexColor);
+}
+
+// When a preset's line filter narrows down to exactly one S-Bahn line, this
+// returns a ready-to-use gradient suggestion matching that line's color.
+// Returns null when there's no single-S-Bahn-line filter to match.
+function getSbahnLineGradientSuggestion(linesFilterText) {
+    const parsedLines = parseLineFilter(linesFilterText);
+    if (!parsedLines || parsedLines.length !== 1) return null;
+
+    const [line] = parsedLines;
+    const gradientName = lineGradientName(line);
+    if (!LINE_COLORS.SBAHN[line] || !CONFIG.gradients[gradientName]) return null;
+
+    return {
+        name: gradientName,
+        label: `Match ${line}`,
+        emoji: "🎨",
+        lineLabel: line
+    };
+}
+
+// ============================================================================
 // PARAMETER PARSING
 // ============================================================================
 
@@ -802,10 +919,17 @@ async function askText({ title, message = "", defaultValue = "", placeholder = "
     return value;
 }
 
-async function askGradient(defaultGradient = "black") {
+async function askGradient(defaultGradient = "black", suggestion = null) {
     const alert = new Alert();
     alert.title = "Choose a color";
-    alert.message = "Select the widget background color.";
+    alert.message = suggestion
+        ? `Select the widget background color. Since you're only showing ${suggestion.lineLabel}, you could match its color.`
+        : "Select the widget background color.";
+
+    if (suggestion) {
+        const suffix = suggestion.name === defaultGradient ? " (suggested, default)" : " (suggested)";
+        alert.addAction(`${suggestion.emoji} ${suggestion.label}${suffix}`);
+    }
 
     AVAILABLE_GRADIENTS.forEach(g => {
         const displayLabel = `${g.emoji} ${g.label}`;
@@ -822,13 +946,24 @@ async function askGradient(defaultGradient = "black") {
         return null;
     }
 
+    if (suggestion) {
+        if (selectedIndex === 0) return suggestion.name;
+        return AVAILABLE_GRADIENTS[selectedIndex - 1].name;
+    }
     return AVAILABLE_GRADIENTS[selectedIndex].name;
 }
 
-async function askGradientOrKeepCurrent(defaultGradient = "black") {
+async function askGradientOrKeepCurrent(defaultGradient = "black", suggestion = null) {
     const alert = new Alert();
     alert.title = "Choose a color";
-    alert.message = "Pick a new widget background color, or keep the current one.";
+    alert.message = suggestion
+        ? `Pick a new widget background color, keep the current one, or match ${suggestion.lineLabel}'s color.`
+        : "Pick a new widget background color, or keep the current one.";
+
+    if (suggestion) {
+        const suffix = suggestion.name === defaultGradient ? " (current)" : " (suggested)";
+        alert.addAction(`${suggestion.emoji} ${suggestion.label}${suffix}`);
+    }
 
     AVAILABLE_GRADIENTS.forEach(g => {
         const displayLabel = `${g.emoji} ${g.label}`;
@@ -843,9 +978,12 @@ async function askGradientOrKeepCurrent(defaultGradient = "black") {
 
     const selectedIndex = await alert.presentSheet();
     if (selectedIndex === -1) return null;
-    if (selectedIndex === AVAILABLE_GRADIENTS.length) return defaultGradient;
 
-    return AVAILABLE_GRADIENTS[selectedIndex].name;
+    const offset = suggestion ? 1 : 0;
+    if (suggestion && selectedIndex === 0) return suggestion.name;
+    if (selectedIndex === AVAILABLE_GRADIENTS.length + offset) return defaultGradient;
+
+    return AVAILABLE_GRADIENTS[selectedIndex - offset].name;
 }
 
 function getWidgetSetupInstructions() {
@@ -1407,7 +1545,7 @@ async function runNearestStationMenu({ stationName, messagePrefix, initialLines,
         } else if (action === "show") {
             await presentNearestPreview(stationName, lines, platform);
         } else if (action === "save") {
-            const gradient = await askGradient();
+            const gradient = await askGradient("black", getSbahnLineGradientSuggestion(lines));
             if (gradient === null) continue; // Colour prompt cancelled — stay in the menu.
             const savedName = await persistPreset({
                 station: stationName,
@@ -1679,7 +1817,7 @@ async function createSavedStation() {
     });
     if (platform === null) return null;
 
-    const gradient = await askGradient();
+    const gradient = await askGradient("black", getSbahnLineGradientSuggestion(lines));
     if (gradient === null) return null;
 
     const profileName = await persistPreset({ station, lines, platform, gradient, suggestedName: station });
@@ -1857,7 +1995,7 @@ async function editSavedStation() {
             if (newPlatform === null) return null;
             platform = newPlatform;
         } else if (fieldChoice === 3) {
-            const newGradient = await askGradientOrKeepCurrent(gradient);
+            const newGradient = await askGradientOrKeepCurrent(gradient, getSbahnLineGradientSuggestion(lines));
             if (newGradient === null) return null;
             gradient = newGradient;
         } else if (fieldChoice === 4) {
