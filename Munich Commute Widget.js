@@ -1306,13 +1306,11 @@ async function createWidget() {
     const mainStack = widget.addStack();
     mainStack.layoutVertically();
     mainStack.topAlignContent();
-    console.log('[INFO]   - Added main vertical stack');
 
     // HEADING - Station Name & Time
     const headerStack = mainStack.addStack();
     headerStack.layoutHorizontally();
     headerStack.spacing = 8;
-    console.log('[INFO]   - Added header stack');
 
     // Create horizontal stack for the icon and station name
     const titleStack = headerStack.addStack();
@@ -1337,7 +1335,6 @@ async function createWidget() {
     stationName.leftAlignText();
     stationName.font = widgetConfig.stationNameFont;
     stationName.lineLimit = 1;
-    console.log('[INFO]   - Added station name and icon');
 
     // Subtract minutes indicator
     if (SHOW_SUBTRACT_MINUTES && SUBTRACT_MINUTES > 0) {
@@ -1350,27 +1347,15 @@ async function createWidget() {
 
     // Add space between header and departure information
     mainStack.addSpacer();
-    console.log('[INFO]   - Added spacer after header');
 
     const departureCount = Math.min(widgetConfig.itemsCount, departures.length);
     if (widgetConfig.columns > 1) {
         addDepartureGrid(mainStack, departures, widgetConfig);
-        for (let i = 0; i < departureCount; i++) {
-            console.log(`[INFO]   - Added grid cell for departure ${i + 1}: line ${departures[i].label}, destination ${departures[i].destination}`);
-        }
     } else {
         for (let i = 0; i < departureCount; i++) {
-            addDepartureListRow(
-                mainStack,
-                departures[i],
-                i,
-                widgetConfig,
-                i === departureCount - 1
-            );
-            console.log(`[INFO]   - Added row for departure ${i + 1}: line ${departures[i].label}, destination ${departures[i].destination}`);
+            addDepartureListRow(mainStack, departures[i], i, widgetConfig, i === departureCount - 1);
         }
     }
-    console.log('[INFO]   - Finished adding departure rows');
 
     return widget;
 }
@@ -2102,19 +2087,8 @@ async function main() {
 
     if (!config.runsInWidget) {
         const widgetSize = config.widgetFamily || 'large';
-        switch(widgetSize) {
-            case 'small':
-                console.log('[INFO] Step 8: Presenting small widget preview.');
-                await widget.presentSmall();
-                break;
-            case 'large':
-                console.log('[INFO] Step 8: Presenting large widget preview.');
-                await widget.presentLarge();
-                break;
-            default:
-                console.log('[INFO] Step 8: Presenting medium widget preview.');
-                await widget.presentMedium();
-        }
+        console.log(`[INFO] Step 8: Presenting ${widgetSize} widget preview.`);
+        await presentWidgetPreview(widget, widgetSize);
 
         // Tapping a "nearest" widget resolves a station dynamically, just
         // like a preset — so once this preview is closed, offer the same
