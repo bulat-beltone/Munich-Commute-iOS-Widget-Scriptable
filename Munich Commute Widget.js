@@ -781,6 +781,32 @@ function addDepartureGrid(mainStack, departures, widgetConfig) {
 // UI HELPER FUNCTIONS (for wizards)
 // ============================================================================
 
+// Presents a simple informational/error alert with a single dismiss button.
+async function showMessage(title, message, actionLabel = "OK") {
+    const alert = new Alert();
+    alert.title = title;
+    alert.message = message;
+    alert.addAction(actionLabel);
+    await alert.presentAlert();
+}
+
+// Presents a selection sheet built from an array of { id, label, destructive? }
+// actions and returns the chosen action's id, or null when cancelled.
+async function presentMenu({ title, message = "", actions, cancelLabel = "Cancel" }) {
+    const menu = new Alert();
+    menu.title = title;
+    menu.message = message;
+    actions.forEach(action => {
+        if (action.destructive) menu.addDestructiveAction(action.label);
+        else menu.addAction(action.label);
+    });
+    menu.addCancelAction(cancelLabel);
+
+    const selectedIndex = await menu.presentSheet();
+    if (selectedIndex === -1) return null;
+    return actions[selectedIndex].id;
+}
+
 async function askText({ title, message = "", defaultValue = "", placeholder = "", isOptional = false }) {
     const alert = new Alert();
     alert.title = title;
@@ -890,39 +916,25 @@ async function searchAndSelectStation(typedStation) {
     try {
         response = await new Request(url).loadJSON();
     } catch (e) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Network error";
-        errorAlert.message = "Could not search for stations. Check your internet connection.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
+        await showMessage("Network error", "Could not search for stations. Check your internet connection.");
         return null;
     }
 
     const stations = response.filter(entry => entry.type === "STATION");
 
     if (stations.length === 0) {
-        const noMatchAlert = new Alert();
-        noMatchAlert.title = "No station found";
-        noMatchAlert.message = `No station found for "${typedStation}"`;
-        noMatchAlert.addAction("OK");
-        await noMatchAlert.presentAlert();
+        await showMessage("No station found", `No station found for "${typedStation}"`);
         return null;
     }
-
-    const selectionAlert = new Alert();
-    selectionAlert.title = "Select station";
-    selectionAlert.message = `Found ${stations.length} match${stations.length > 1 ? 'es' : ''} for "${typedStation}"`;
 
     const shownStations = stations.slice(0, 10);
-    shownStations.forEach(station => selectionAlert.addAction(station.name));
-    selectionAlert.addCancelAction("Cancel");
+    const selectedName = await presentMenu({
+        title: "Select station",
+        message: `Found ${stations.length} match${stations.length > 1 ? 'es' : ''} for "${typedStation}"`,
+        actions: shownStations.map(station => ({ id: station.name, label: station.name }))
+    });
 
-    const selectedIndex = await selectionAlert.presentSheet();
-    if (selectedIndex === -1) {
-        return null;
-    }
-
-    return shownStations[selectedIndex].name;
+    return selectedName;
 }
 
 // ============================================================================
@@ -1375,16 +1387,12 @@ async function runNearestStationMenu({ stationName, messagePrefix, initialLines,
 
     while (true) {
         const actions = buildNearestStationMenuActions(lines, platform, hasDefaults);
-
-        const filterMenu = new Alert();
-        filterMenu.title = stationName;
-        filterMenu.message = `${messagePrefix ? messagePrefix + " " : ""}Set filters, show departures, or save as a preset.\nTap Cancel when done.`;
-        actions.forEach(a => filterMenu.addAction(a.label));
-        filterMenu.addCancelAction("Cancel");
-
-        const filterChoice = await filterMenu.presentSheet();
-        if (filterChoice === -1) return null;
-        const action = actions[filterChoice].id;
+        const action = await presentMenu({
+            title: stationName,
+            message: `${messagePrefix ? messagePrefix + " " : ""}Set filters, show departures, or save as a preset.\nTap Cancel when done.`,
+            actions
+        });
+        if (action === null) return null;
 
         if (action === "platform") {
             const newPlatform = await askText({
@@ -1438,11 +1446,7 @@ async function findNearestStation() {
     try {
         location = await Location.current();
     } catch (e) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Location Error";
-        errorAlert.message = "Could not get your location. Please enable location access in Settings.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
+        await showMessage("Location Error", "Could not get your location. Please enable location access in Settings.");
         return null;
     }
 
@@ -1457,20 +1461,12 @@ async function findNearestStation() {
     try {
         stations = await new Request(url).loadJSON();
     } catch (e) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Network error";
-        errorAlert.message = "Could not search for nearby stations. Check your internet connection.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
+        await showMessage("Network error", "Could not search for nearby stations. Check your internet connection.");
         return null;
     }
 
     if (!Array.isArray(stations) || stations.length === 0) {
-        const noMatchAlert = new Alert();
-        noMatchAlert.title = "No stations found";
-        noMatchAlert.message = "No stations found nearby.";
-        noMatchAlert.addAction("OK");
-        await noMatchAlert.presentAlert();
+        await showMessage("No stations found", "No stations found nearby.");
         return null;
     }
 
@@ -1482,11 +1478,7 @@ async function findNearestStation() {
     if (activeTypeCodes.length > 0) {
         stations = stations.filter(station => stationMatchesTypeCodes(station, activeTypeCodes));
         if (stations.length === 0) {
-            const noMatchAlert = new Alert();
-            noMatchAlert.title = `No ${typeLabel} nearby`;
-            noMatchAlert.message = `No ${typeLabel} stations were found near your current location.`;
-            noMatchAlert.addAction("OK");
-            await noMatchAlert.presentAlert();
+            await showMessage(`No ${typeLabel} nearby`, `No ${typeLabel} stations were found near your current location.`);
             return null;
         }
     }
@@ -1628,11 +1620,7 @@ async function persistPreset({ station, lines, platform, gradient, suggestedName
 
     const profileName = sanitizeProfileName(profileNameInput);
     if (!profileName) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Invalid preset name";
-        errorAlert.message = "Please use at least one valid character.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
+        await showMessage("Invalid preset name", "Please use at least one valid character.");
         return null;
     }
 
@@ -1882,11 +1870,7 @@ async function editSavedStation() {
 
     const updatedProfilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
     if (profileName !== originalProfileName && fileManager.fileExists(updatedProfilePath)) {
-        const errorAlert = new Alert();
-        errorAlert.title = "Name already exists";
-        errorAlert.message = `A preset named "${profileName}" already exists.`;
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
+        await showMessage("Name already exists", `A preset named "${profileName}" already exists.`);
         return null;
     }
 
@@ -1930,11 +1914,7 @@ async function confirmAndDeletePreset(profileDirectory, profileName) {
     const fileManager = FileManager.iCloud();
     fileManager.remove(fileManager.joinPath(profileDirectory, `${profileName}.txt`));
 
-    const successAlert = new Alert();
-    successAlert.title = "Deleted";
-    successAlert.message = `"${profileName}" has been deleted.`;
-    successAlert.addAction("OK");
-    await successAlert.presentAlert();
+    await showMessage("Deleted", `"${profileName}" has been deleted.`);
 
     return true;
 }
@@ -1989,22 +1969,17 @@ function saveSettings() {
 
 async function showSettingsStationDefaults() {
     while (true) {
-        const actions = [
-            { id: "stationTypes", label: `🚉 Station Types: ${getStationTypesSummaryLabel(DEFAULT_STATION_TYPES)}` },
-            { id: "lines",        label: `🚆 Lines: ${DEFAULT_STATION_LINES || "all"}` },
-            { id: "platform",     label: `🛤 Platform: ${DEFAULT_STATION_PLATFORM || "all"}` },
-            { id: "back",         label: "← Back" },
-        ];
-        const menu = new Alert();
-        menu.title = "Station Defaults";
-        menu.message = "Pre-filled filters when using Find Nearest Station.";
-        actions.forEach(a => menu.addAction(a.label));
-        menu.addCancelAction("Cancel");
-
-        const idx = await menu.presentSheet();
-        if (idx === -1) return;
-        const action = actions[idx].id;
-        if (action === "back") return;
+        const action = await presentMenu({
+            title: "Station Defaults",
+            message: "Pre-filled filters when using Find Nearest Station.",
+            actions: [
+                { id: "stationTypes", label: `🚉 Station Types: ${getStationTypesSummaryLabel(DEFAULT_STATION_TYPES)}` },
+                { id: "lines",        label: `🚆 Lines: ${DEFAULT_STATION_LINES || "all"}` },
+                { id: "platform",     label: `🛤 Platform: ${DEFAULT_STATION_PLATFORM || "all"}` },
+                { id: "back",         label: "← Back" },
+            ]
+        });
+        if (action === null || action === "back") return;
 
         if (action === "stationTypes") {
             await showSettingsStationTypes();
@@ -2047,43 +2022,31 @@ async function showSettingsStationTypes() {
             { id: "train",       label: `🚂 Train: ${DEFAULT_STATION_TYPES.train ? "✅" : "❌"}` },
             { id: "back",        label: "← Back" },
         ];
-        const menu = new Alert();
-        menu.title = "Station Types";
-        menu.message = "Restrict Find Nearest Station to these types.\nLeave all unchecked to search any station.";
-        actions.forEach(a => menu.addAction(a.label));
-        menu.addCancelAction("Cancel");
+        const action = await presentMenu({
+            title: "Station Types",
+            message: "Restrict Find Nearest Station to these types.\nLeave all unchecked to search any station.",
+            actions
+        });
+        if (action === null || action === "back") return;
 
-        const idx = await menu.presentSheet();
-        if (idx === -1) return;
-        const action = actions[idx].id;
-        if (action === "back") return;
-
-        if (action === "sbahn") DEFAULT_STATION_TYPES.sbahn = !DEFAULT_STATION_TYPES.sbahn;
-        else if (action === "ubahn") DEFAULT_STATION_TYPES.ubahn = !DEFAULT_STATION_TYPES.ubahn;
-        else if (action === "bus") DEFAULT_STATION_TYPES.bus = !DEFAULT_STATION_TYPES.bus;
-        else if (action === "regionalBus") DEFAULT_STATION_TYPES.regionalBus = !DEFAULT_STATION_TYPES.regionalBus;
-        else if (action === "tram") DEFAULT_STATION_TYPES.tram = !DEFAULT_STATION_TYPES.tram;
-        else if (action === "train") DEFAULT_STATION_TYPES.train = !DEFAULT_STATION_TYPES.train;
+        DEFAULT_STATION_TYPES[action] = !DEFAULT_STATION_TYPES[action];
         saveSettings();
     }
 }
 
 async function showSettings() {
     while (true) {
-        const actions = [
-            { id: "stationDefaults",  label: "🚉 Station Defaults →" },
-            { id: "subtractMinutes",  label: `⏱ Subtract Minutes: ${SUBTRACT_MINUTES}` },
-            { id: "showSubtractMins", label: `👁 Show Subtracted Minutes: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}` },
-        ];
-        const menu = new Alert();
-        menu.title = "Settings";
-        menu.message = "Tap a setting to change it.";
-        actions.forEach(a => menu.addAction(a.label));
-        menu.addCancelAction("Done");
-
-        const idx = await menu.presentSheet();
-        if (idx === -1) return;
-        const action = actions[idx].id;
+        const action = await presentMenu({
+            title: "Settings",
+            message: "Tap a setting to change it.",
+            cancelLabel: "Done",
+            actions: [
+                { id: "stationDefaults",  label: "🚉 Station Defaults →" },
+                { id: "subtractMinutes",  label: `⏱ Subtract Minutes: ${SUBTRACT_MINUTES}` },
+                { id: "showSubtractMins", label: `👁 Show Subtracted Minutes: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}` },
+            ]
+        });
+        if (action === null) return;
 
         if (action === "stationDefaults") {
             await showSettingsStationDefaults();
@@ -2106,19 +2069,11 @@ async function showSettings() {
 }
 
 async function showHowToAddWidgetInstructions() {
-    const instructionsAlert = new Alert();
-    instructionsAlert.title = "How to Add Widget";
-    instructionsAlert.message = getWidgetSetupInstructions();
-    instructionsAlert.addAction("Done");
-    await instructionsAlert.presentAlert();
+    await showMessage("How to Add Widget", getWidgetSetupInstructions(), "Done");
 }
 
 async function showPostCreateInstructions(profileName) {
-    const instructionsAlert = new Alert();
-    instructionsAlert.title = "Add to Home Screen";
-    instructionsAlert.message = getPostCreateInstructions(profileName);
-    instructionsAlert.addAction("Done");
-    await instructionsAlert.presentAlert();
+    await showMessage("Add to Home Screen", getPostCreateInstructions(profileName), "Done");
 }
 
 async function showMainMenu() {
