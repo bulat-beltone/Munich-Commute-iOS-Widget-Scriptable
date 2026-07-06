@@ -1624,15 +1624,10 @@ async function persistPreset({ station, lines, platform, gradient, suggestedName
         return null;
     }
 
-    const parameterParts = [`station: ${station}`];
-    if (lines) parameterParts.push(`lines: ${lines}`);
-    if (platform) parameterParts.push(`platform: ${platform}`);
-    parameterParts.push(`gradient: ${gradient || "black"}`);
-
     const fileManager = FileManager.iCloud();
     const profileDirectory = ensureAppDirectory();
     const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
-    fileManager.writeString(profilePath, parameterParts.join("; "));
+    fileManager.writeString(profilePath, buildParameterString({ station, lines, platform, gradient }));
 
     Pasteboard.copy(profileName);
     return profileName;
@@ -1692,40 +1687,10 @@ async function createSavedStation() {
 }
 
 async function viewSavedStation() {
-    const fileManager = FileManager.iCloud();
-    const documentsDirectory = fileManager.documentsDirectory();
-    const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
+    const selected = await selectPreset("View Preset", "Select a preset to open:");
+    if (selected === null) return false;
 
-    if (!fileManager.fileExists(profileDirectory)) {
-        const errorAlert = new Alert();
-        errorAlert.title = "No Presets";
-        errorAlert.message = "You haven't created any presets yet.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
-        return false;
-    }
-
-    const files = listPresetNames(profileDirectory);
-
-    if (files.length === 0) {
-        const errorAlert = new Alert();
-        errorAlert.title = "No Presets";
-        errorAlert.message = "You haven't created any presets yet.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
-        return false;
-    }
-
-    const selectAlert = new Alert();
-    selectAlert.title = "View Preset";
-    selectAlert.message = "Select a preset to open:";
-    files.forEach(f => selectAlert.addAction(f));
-    selectAlert.addCancelAction("Cancel");
-
-    const selectedIndex = await selectAlert.presentSheet();
-    if (selectedIndex === -1) return false;
-
-    const profileName = files[selectedIndex];
+    const profileName = selected.profileName;
     console.log(`[INFO]   - Loading saved station profile: '${profileName}'`);
 
     const selectedParameterString = resolveWidgetParameter(profileName);
@@ -1746,41 +1711,11 @@ async function viewSavedStation() {
 }
 
 async function editSavedStation() {
+    const selected = await selectPreset("Edit Preset", "Select a preset to edit:");
+    if (selected === null) return null;
+
     const fileManager = FileManager.iCloud();
-    const documentsDirectory = fileManager.documentsDirectory();
-    const profileDirectory = fileManager.joinPath(documentsDirectory, PROFILE_DIRECTORY_NAME);
-
-    if (!fileManager.fileExists(profileDirectory)) {
-        const errorAlert = new Alert();
-        errorAlert.title = "No Presets";
-        errorAlert.message = "You haven't created any presets yet.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
-        return null;
-    }
-
-    const files = listPresetNames(profileDirectory);
-
-    if (files.length === 0) {
-        const errorAlert = new Alert();
-        errorAlert.title = "No Presets";
-        errorAlert.message = "You haven't created any presets yet.";
-        errorAlert.addAction("OK");
-        await errorAlert.presentAlert();
-        return null;
-    }
-
-    const selectAlert = new Alert();
-    selectAlert.title = "Edit Preset";
-    selectAlert.message = "Select a preset to edit:";
-    files.forEach(f => selectAlert.addAction(f));
-    selectAlert.addCancelAction("Cancel");
-
-    const selectedIndex = await selectAlert.presentSheet();
-    if (selectedIndex === -1) return null;
-
-    const originalProfileName = files[selectedIndex];
-    const originalProfilePath = fileManager.joinPath(profileDirectory, `${originalProfileName}.txt`);
+    const { profileName: originalProfileName, profileDirectory, profilePath: originalProfilePath } = selected;
     const content = fileManager.readString(originalProfilePath).trim();
 
     // Parse existing values
@@ -1874,20 +1809,16 @@ async function editSavedStation() {
         return null;
     }
 
-    const parameterParts = [`station: ${station}`];
-    if (lines) parameterParts.push(`lines: ${lines}`);
-    if (platform) parameterParts.push(`platform: ${platform}`);
-    parameterParts.push(`gradient: ${gradient}`);
-    if (testDataFile) parameterParts.push(`test: ${testDataFile}`);
+    const parameterString = buildParameterString({ station, lines, platform, gradient, testDataFile });
 
-    fileManager.writeString(updatedProfilePath, parameterParts.join("; "));
+    fileManager.writeString(updatedProfilePath, parameterString);
     if (profileName !== originalProfileName) {
         fileManager.remove(originalProfilePath);
     }
     Pasteboard.copy(profileName);
 
     // Show widget preview directly
-    applyParsedWidgetParameters(parseWidgetParameters(parameterParts.join("; ")));
+    applyParsedWidgetParameters(parseWidgetParameters(parameterString));
 
     const previousWidgetFamily = config.widgetFamily;
     config.widgetFamily = "large";
@@ -1922,6 +1853,42 @@ async function confirmAndDeletePreset(profileDirectory, profileName) {
 function getAppDirectory() {
     const fileManager = FileManager.iCloud();
     return fileManager.joinPath(fileManager.documentsDirectory(), PROFILE_DIRECTORY_NAME);
+}
+
+// Serializes a preset into the "key: value; ..." widget parameter string.
+function buildParameterString({ station, lines, platform, gradient, testDataFile }) {
+    const parts = [`station: ${station}`];
+    if (lines) parts.push(`lines: ${lines}`);
+    if (platform) parts.push(`platform: ${platform}`);
+    parts.push(`gradient: ${gradient || "black"}`);
+    if (testDataFile) parts.push(`test: ${testDataFile}`);
+    return parts.join("; ");
+}
+
+// Prompts the user to pick a saved preset, showing a "No Presets" message when
+// none exist. Returns { profileName, profileDirectory, profilePath } or null.
+async function selectPreset(title, message) {
+    const fileManager = FileManager.iCloud();
+    const profileDirectory = getAppDirectory();
+    const files = fileManager.fileExists(profileDirectory) ? listPresetNames(profileDirectory) : [];
+
+    if (files.length === 0) {
+        await showMessage("No Presets", "You haven't created any presets yet.");
+        return null;
+    }
+
+    const profileName = await presentMenu({
+        title,
+        message,
+        actions: files.map(f => ({ id: f, label: f }))
+    });
+    if (profileName === null) return null;
+
+    return {
+        profileName,
+        profileDirectory,
+        profilePath: fileManager.joinPath(profileDirectory, `${profileName}.txt`)
+    };
 }
 
 function listPresetNames(profileDirectory) {
