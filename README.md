@@ -13,7 +13,7 @@ Works based on Scriptable app.
 - **Platform badge** — a small rounded, translucent-white square shows which platform each departure uses; hidden only when your filter already narrows things down to a single platform
 - **Cancelled departures** remain visible with a subtle ❌ mark, dimmed line badge, time, and destination text
 - **Test data preview** — preview any widget size with fixture departures, without hitting the live API
-- **Customizable colors**, including a **suggested line-matched color** when a preset filters down to a single S-Bahn line (e.g. filtering to just `S3` suggests a gradient built from S3's own color). U-Bahn, Bus, and Tram are planned for a future update.
+- **Customizable colors**, including a **suggested line-matched color** when a preset filters down to a single line (e.g. filtering to just `S3` suggests a gradient built from S3's own color; the same works for most U-Bahn lines, and for Bus/Regional Bus/Tram)
 
 Color options:
 - grey
@@ -22,7 +22,9 @@ Color options:
 - green
 - purple
 - teal
-- one line-matched gradient per S-Bahn line (`s1`, `s2`, `s3`, `s4`, `s5`, `s6`, `s7`, `s8`, `s20`) — suggested automatically, or selectable manually
+- one line-matched gradient per S-Bahn line (`s1`–`s7`, `s8`, `s20`) — suggested automatically, or selectable manually
+- one line-matched gradient per U-Bahn line, except U7/U8 (`u1`–`u6`) — U7 and U8 render as a two-color badge with no single hue to match, so they're intentionally skipped
+- one line-matched gradient per surface mode (`bus`, `regionalbus`, `tram`) — Bus, Regional Bus, and Tram routes all share one flat brand color per mode rather than a color per route number, so filtering to an unrecognized single line suggests all three as candidates
 
 ## Installation
 
@@ -192,7 +194,7 @@ Choose from available gradients:
 - `purple`
 - `teal`
 
-Or match a single S-Bahn line's own color, e.g. `gradient: s3`. These are generated from each line's badge color using the same lightness/saturation recipe as the gradients above, so they fit the same visual style. When a preset's line filter narrows down to exactly one S-Bahn line, the color picker suggests this automatically — but you can also set it manually, or combine it with a different line filter.
+Or match a single line's own color, e.g. `gradient: s3`. These are generated from each line's badge color using the same lightness/saturation recipe as the gradients above, so they fit the same visual style. When a preset's line filter narrows down to exactly one line, the color picker suggests the matching option(s) automatically — but you can also set it manually, or combine it with a different line filter.
 
 | Line | Gradient key |
 |------|--------------|
@@ -205,6 +207,19 @@ Or match a single S-Bahn line's own color, e.g. `gradient: s3`. These are genera
 | S7 | `s7` |
 | S8 | `s8` |
 | S20 | `s20` |
+| U1 | `u1` |
+| U2 | `u2` |
+| U3 | `u3` |
+| U4 | `u4` |
+| U5 | `u5` |
+| U6 | `u6` |
+| Bus | `bus` |
+| Regional Bus | `regionalbus` |
+| Tram | `tram` |
+
+**U7 and U8** are the only rail lines without a line-matched gradient: their badges already blend two colors (green→red for U7, red→orange for U8), so there's no single hue to derive a gradient from.
+
+**Bus, Regional Bus, and Tram** each use one flat brand color across every route number (this app doesn't track colors per individual bus/tram route), so filtering down to a single line that isn't a recognized S-Bahn/U-Bahn label suggests all three surface-transport gradients as candidates — pick whichever actually matches the line you filtered to.
 
 #### Presets
 You can provide a **preset name** as the widget parameter (without `:`). The script will then load the preset.
