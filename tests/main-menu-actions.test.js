@@ -96,6 +96,67 @@ function createScriptableMocks() {
     };
 }
 
+// Like loadWidgetExports, but swaps in an Alert mock whose presentSheet()
+// returns pre-programmed indices (in order) so gradient-picker tests can
+// simulate a specific tap without a real UI.
+function loadWidgetExportsWithAlertResponses(responses) {
+    const mocks = createScriptableMocks();
+    const queue = [...responses];
+    const presentedAlerts = [];
+
+    class QueueAlert {
+        constructor() {
+            this.title = "";
+            this.message = "";
+            this.actions = [];
+        }
+
+        addAction(title) {
+            this.actions.push(title);
+        }
+
+        addDestructiveAction(title) {
+            this.actions.push(title);
+        }
+
+        addCancelAction(title) {
+            this.cancelAction = title;
+        }
+
+        addTextField() {}
+
+        async presentAlert() {
+            return 0;
+        }
+
+        async presentSheet() {
+            presentedAlerts.push(this);
+            return queue.length ? queue.shift() : -1;
+        }
+
+        textFieldValue() {
+            return "";
+        }
+    }
+
+    mocks.Alert = QueueAlert;
+
+    const source = fs.readFileSync(scriptPath, "utf8")
+        .replace(/\nawait main\(\);\nScript\.complete\(\);\s*$/, "");
+
+    const context = vm.createContext(mocks);
+    vm.runInContext(`${source}
+globalThis.__testExports = {
+    askGradient,
+    askGradientOrKeepCurrent,
+    getLineGradientSuggestions,
+    CONFIG,
+    AVAILABLE_GRADIENTS
+};`, context, { filename: scriptPath });
+
+    return { exports: context.__testExports, presentedAlerts };
+}
+
 function loadWidgetExports() {
     const source = fs.readFileSync(scriptPath, "utf8")
         .replace(/\nawait main\(\);\nScript\.complete\(\);\s*$/, "");
@@ -116,7 +177,12 @@ globalThis.__testExports = {
     normalizeWidgetSize,
     buildDeparturesFromScenario,
     shouldShowPlatformBadge,
-    buildNearestStationMenuActions
+    buildNearestStationMenuActions,
+    getLineGradientSuggestions,
+    CONFIG,
+    LINE_COLORS,
+    askGradient,
+    askGradientOrKeepCurrent
 };`, context, { filename: scriptPath });
 
     return context.__testExports;
@@ -390,4 +456,161 @@ test("buildDeparturesFromScenario converts test fixture rows into departure obje
     assert.equal(departures[1].delayInMinutes, 4);
     assert.equal(departures[1].plannedDepartureTime, now + 10 * 60 * 1000);
     assert.equal(departures[1].realtimeDepartureTime, now + 14 * 60 * 1000);
+});
+
+test("getLineGradientSuggestions suggests a match for a single filtered S-Bahn line", () => {
+    const { getLineGradientSuggestions } = loadWidgetExports();
+
+    const suggestions = getLineGradientSuggestions("S3");
+    assert.equal(suggestions.length, 1);
+    assert.equal(suggestions[0].name, "s3");
+    assert.equal(suggestions[0].label, "Match S3");
+    assert.equal(suggestions[0].emoji, "🎨");
+    assert.equal(suggestions[0].lineLabel, "S3");
+
+    assert.equal(getLineGradientSuggestions("s4")[0].name, "s4");
+});
+
+test("getLineGradientSuggestions suggests a match for a single filtered U-Bahn line", () => {
+    const { getLineGradientSuggestions } = loadWidgetExports();
+
+    const suggestions = getLineGradientSuggestions("U3");
+    assert.equal(suggestions.length, 1);
+    assert.equal(suggestions[0].name, "u3");
+    assert.equal(suggestions[0].label, "Match U3");
+    assert.equal(suggestions[0].lineLabel, "U3");
+});
+
+test("getLineGradientSuggestions skips U7 and U8, which don't have a single hue", () => {
+    const { getLineGradientSuggestions } = loadWidgetExports();
+
+    assert.equal(getLineGradientSuggestions("U7").length, 0);
+    assert.equal(getLineGradientSuggestions("u8").length, 0);
+});
+
+test("getLineGradientSuggestions offers all three surface-transport options for an unrecognized line", () => {
+    const { getLineGradientSuggestions } = loadWidgetExports();
+
+    const suggestions = getLineGradientSuggestions("58");
+    assert.equal(suggestions.length, 3);
+    assert.deepEqual(Array.from(suggestions, s => s.name), ["bus", "regionalbus", "tram"]);
+    assert.deepEqual(Array.from(suggestions, s => s.label), ["Match Bus", "Match Regional Bus", "Match Tram"]);
+    Array.from(suggestions).forEach(s => assert.equal(s.lineLabel, "58"));
+});
+
+test("getLineGradientSuggestions returns no suggestions when there is no single-line filter", () => {
+    const { getLineGradientSuggestions } = loadWidgetExports();
+
+    assert.equal(getLineGradientSuggestions("").length, 0);
+    assert.equal(getLineGradientSuggestions(null).length, 0);
+    assert.equal(getLineGradientSuggestions("S3, S4").length, 0);
+    assert.equal(getLineGradientSuggestions("S3, 58").length, 0);
+});
+
+test("CONFIG.gradients has a line-matched gradient for every S-Bahn and single-hue U-Bahn line", () => {
+    const { CONFIG, LINE_COLORS } = loadWidgetExports();
+
+    const sbahnLines = Object.keys(LINE_COLORS.SBAHN).filter(key => !key.endsWith("_fg"));
+    const singleHueUbahnLines = Object.keys(LINE_COLORS.UBAHN).filter(key => !key.includes("_gradient_"));
+
+    for (const line of [...sbahnLines, ...singleHueUbahnLines]) {
+        const gradient = CONFIG.gradients[line.toLowerCase()];
+        assert.ok(gradient, `expected a gradient for ${line}`);
+        assert.match(gradient.top, /^#[0-9a-f]{6}$/i);
+        assert.match(gradient.bottom, /^#[0-9a-f]{6}$/i);
+    }
+
+    // U7 and U8 use a two-color badge already, so no single-hue gradient is generated for them.
+    assert.equal(CONFIG.gradients.u7, undefined);
+    assert.equal(CONFIG.gradients.u8, undefined);
+});
+
+test("CONFIG.gradients has a line-matched gradient for Bus, Regional Bus, and Tram", () => {
+    const { CONFIG } = loadWidgetExports();
+
+    for (const key of ["bus", "regionalbus", "tram"]) {
+        const gradient = CONFIG.gradients[key];
+        assert.ok(gradient, `expected a gradient for ${key}`);
+        assert.match(gradient.top, /^#[0-9a-f]{6}$/i);
+        assert.match(gradient.bottom, /^#[0-9a-f]{6}$/i);
+    }
+});
+
+test("line gradients follow the same lightness recipe as the hand-picked accent gradients", () => {
+    const { CONFIG } = loadWidgetExports();
+
+    // S4's badge color (#DB3B4B) shares the same hue family as the
+    // hand-picked "red" gradient, so the generated gradient should line up
+    // with it exactly if the shared recipe (39%/20% top, 46%/8% bottom) is
+    // applied correctly.
+    assert.equal(CONFIG.gradients.s4.top.toLowerCase(), CONFIG.gradients.red.top.toLowerCase());
+    assert.equal(CONFIG.gradients.s4.bottom.toLowerCase(), CONFIG.gradients.red.bottom.toLowerCase());
+});
+
+test("askGradient lists the line-match suggestion first and resolves it when selected", async () => {
+    const { exports, presentedAlerts } = loadWidgetExportsWithAlertResponses([0]);
+    const { askGradient, getLineGradientSuggestions } = exports;
+
+    const suggestions = getLineGradientSuggestions("S3");
+    const gradient = await askGradient("black", suggestions);
+
+    assert.equal(gradient, "s3");
+    assert.equal(presentedAlerts[0].actions[0], "🎨 Match S3 (suggested)");
+});
+
+test("askGradient lists all three surface-transport suggestions for an unrecognized line", async () => {
+    const { exports, presentedAlerts } = loadWidgetExportsWithAlertResponses([2]);
+    const { askGradient, getLineGradientSuggestions } = exports;
+
+    const suggestions = getLineGradientSuggestions("58");
+    const gradient = await askGradient("black", suggestions);
+
+    assert.deepEqual(presentedAlerts[0].actions.slice(0, 3), [
+        "🚌 Match Bus (suggested)",
+        "🚍 Match Regional Bus (suggested)",
+        "🚊 Match Tram (suggested)"
+    ]);
+    // Index 2 is the third suggestion (Tram).
+    assert.equal(gradient, "tram");
+});
+
+test("askGradient still resolves regular gradients correctly when suggestions are shown", async () => {
+    const { exports } = loadWidgetExportsWithAlertResponses([1]);
+    const { askGradient, getLineGradientSuggestions, AVAILABLE_GRADIENTS } = exports;
+
+    const suggestions = getLineGradientSuggestions("S3");
+    const gradient = await askGradient("black", suggestions);
+
+    // Index 1 is one past the single suggestion, i.e. the first AVAILABLE_GRADIENTS entry.
+    assert.equal(gradient, AVAILABLE_GRADIENTS[0].name);
+});
+
+test("askGradient behaves as before when there are no suggestions", async () => {
+    const { exports } = loadWidgetExportsWithAlertResponses([0]);
+    const { askGradient, AVAILABLE_GRADIENTS } = exports;
+
+    const gradient = await askGradient("black", []);
+    assert.equal(gradient, AVAILABLE_GRADIENTS[0].name);
+});
+
+test("askGradientOrKeepCurrent marks the suggestion as current when it matches the saved gradient", async () => {
+    const { exports, presentedAlerts } = loadWidgetExportsWithAlertResponses([0]);
+    const { askGradientOrKeepCurrent } = exports;
+
+    const gradient = await askGradientOrKeepCurrent("s3", [{ name: "s3", label: "Match S3", emoji: "🎨", lineLabel: "S3" }]);
+
+    assert.equal(gradient, "s3");
+    assert.equal(presentedAlerts[0].actions[0], "🎨 Match S3 (current)");
+});
+
+test("askGradientOrKeepCurrent falls back to the current gradient via Continue, accounting for the suggestion offset", async () => {
+    const suggestions = [{ name: "s3", label: "Match S3", emoji: "🎨", lineLabel: "S3" }];
+    const { exports } = loadWidgetExportsWithAlertResponses([]);
+    const { AVAILABLE_GRADIENTS } = exports;
+
+    // With a suggestion shown, "Continue" (keep current) shifts one slot later.
+    const { exports: exportsWithContinue } = loadWidgetExportsWithAlertResponses([AVAILABLE_GRADIENTS.length + 1]);
+    const gradient = await exportsWithContinue.askGradientOrKeepCurrent("blue", suggestions);
+
+    assert.equal(gradient, "blue");
 });
