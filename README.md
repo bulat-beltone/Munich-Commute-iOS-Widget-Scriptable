@@ -51,7 +51,9 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 #### ➕ Create Preset
 A wizard to create a reusable station configuration:
 
-1. **Station** — Search and select from MVG stations
+1. **Station** — Either:
+   - **🔎 Search by Name** — search and select from MVG stations, or
+   - **📍 Nearest (no filter)** — always track the closest station to your current location when the widget refreshes, exactly like the `nearest` live-location parameter (see [📍 Nearest station widget (live location)](#-nearest-station-widget-live-location) below) — no station-type filter is applied beyond your **Station Types** default in Settings, if configured
 2. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
 3. **Platform** (optional) — Filter by platform number
 4. **Color** — Choose a background gradient
@@ -65,7 +67,7 @@ After saving:
 #### ✏️ Edit Preset
 Select an existing preset to change any of its fields, or delete it:
 
-- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset
+- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset, including the choice between **🔎 Search by Name** and **📍 Nearest (no filter)**
 - **Test data** (optional) — point at a JSON file in `Munich Commute/TestData/` to preview the widget with fixed fixture departures instead of live API data (see [Test data preview](#-test-data-preview) below)
 - **🗑️ Delete Preset** — a destructive action in the same menu; confirms before permanently removing the preset file
 
@@ -105,6 +107,7 @@ How it works:
 - Run **🔎 Find Nearest Station** from the app once to grant location permission and seed that cache.
 - The **Station Defaults** (Station Types / Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. only search S-Bahn stops and only show `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override the line/platform default.
 - You can combine the token with a gradient in a preset file, e.g. `nearest-sbahn; gradient: blue`.
+- The `nearest` (no filter) variant can be created directly from **➕ Create Preset** / **✏️ Edit Preset** by choosing **📍 Nearest (no filter)** instead of searching for a station name — no manual file editing needed.
 
 #### ⚙️ Settings
 Accessible from the main menu. Changes save immediately — no Save button needed.

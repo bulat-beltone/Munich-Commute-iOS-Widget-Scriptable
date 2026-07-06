@@ -22,7 +22,8 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 **Scenario:** runs the widget → goes through the wizard → adds the widget to the home screen.
 
-- [ ] `➕ Create Preset`: search for a station → select exact match
+- [ ] `➕ Create Preset`: choose **🔎 Search by Name** or **📍 Nearest (no filter)**
+- [ ] Search by Name: search for a station → select exact match
 - [ ] Line filter (optional)
 - [ ] Platform filter (optional)
 - [ ] Choose colour (gradient)
@@ -102,6 +103,22 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] Header uses a 📍 location icon and the title reads "Nearest: [station]"
 
 **Status:** ✅ `resolveNearestStation` + `NearestCache.json`. S-Bahn detection uses the nearby endpoint's `transportTypes` (falls back to `products` for the bundled dataset).
+
+---
+
+## 5c. Creating a "Nearest" Preset from the Wizard (no filter, same as the UI)
+
+**Scenario:** instead of hand-editing a preset file to add the `nearest` token, a user picks **📍 Nearest (no filter)** directly from **➕ Create Preset** (or converts an existing preset to it via **✏️ Edit Preset**), getting the exact same "no filter" behavior as `🔎 Find Nearest Station` / the `nearest` widget parameter.
+
+- [ ] `➕ Create Preset` → Station step offers **🔎 Search by Name** and **📍 Nearest (no filter)**
+- [ ] Choosing **📍 Nearest (no filter)** skips the station search entirely
+- [ ] Lines / Platform / Gradient / Name steps behave the same as for a regular station preset
+- [ ] The saved preset file contains the bare `nearest` token (e.g. `nearest; gradient: blue`), **not** `station: nearest`
+- [ ] The immediate preview after saving resolves the live nearest station via GPS, same as `🔎 Find Nearest Station`
+- [ ] `✏️ Edit Preset` shows `🚉 Station: 📍 Nearest (no filter)` for such a preset, and the Station field lets you switch back to a searched station or keep the live-location mode
+- [ ] The "no filter" behavior respects the **Station Types** default from Settings — unfiltered (any nearby station) when nothing is configured there, exactly like `🔎 Find Nearest Station`
+
+**Status:** ✅ `askStationMode`, `buildPresetParameterString`, `NEAREST_MODE_TOKEN`, wired into `createSavedStation` and `editSavedStation`.
 
 ---
 
