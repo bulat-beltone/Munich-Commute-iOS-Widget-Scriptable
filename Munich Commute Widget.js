@@ -626,7 +626,7 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
     const label = departure.label;
     const gradTopKey = label + "_gradient_top";
     const gradBottomKey = label + "_gradient_bottom";
-    let usedGradient = false;
+    let backgroundHandled = false;
 
     if (departureVisualState.lineBackgroundColor) {
         lineStack.backgroundColor = new Color(
@@ -635,7 +635,7 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
         );
         lineStack.cornerRadius = 4;
         lineName.textColor = Color.white();
-        usedGradient = true;
+        backgroundHandled = true;
     } else if (transportColors && transportColors[gradTopKey] && transportColors[gradBottomKey]) {
         const grad = new LinearGradient();
         grad.colors = [new Color(transportColors[gradTopKey]), new Color(transportColors[gradBottomKey])];
@@ -644,10 +644,10 @@ function addStyledLineBadge(parentStack, departure, widgetConfig, badgeTopPaddin
         grad.endPoint = new Point(0, 1);
         lineStack.backgroundGradient = grad;
         lineStack.cornerRadius = 4;
-        usedGradient = true;
+        backgroundHandled = true;
         lineName.textColor = Color.white();
     }
-    if (!usedGradient) {
+    if (!backgroundHandled) {
         lineStack.backgroundColor = new Color(lineColor);
         lineStack.cornerRadius = 4;
         const fgKey = label + "_fg";
@@ -1129,15 +1129,20 @@ async function resolveNearestStation(mode) {
 // WIDGET CREATION & RENDERING
 // ============================================================================
 
-function createMessageWidget(title, symbolName = "exclamationmark.triangle") {
-    const widget = new ListWidget();
-    widget.useDefaultPadding();
-
-    const palette = CONFIG.gradients[userGradient] || CONFIG.gradients.black;
+// Applies one of CONFIG.gradients as the widget's background, falling back
+// to black for an unrecognized/missing gradient name.
+function applyGradientBackground(widget, gradientName) {
+    const palette = CONFIG.gradients[gradientName] || CONFIG.gradients.black;
     const gradient = new LinearGradient();
     gradient.colors = [new Color(palette.top), new Color(palette.bottom)];
     gradient.locations = [0.0, 1.0];
     widget.backgroundGradient = gradient;
+}
+
+function createMessageWidget(title, symbolName = "exclamationmark.triangle") {
+    const widget = new ListWidget();
+    widget.useDefaultPadding();
+    applyGradientBackground(widget, userGradient);
 
     widget.addSpacer();
 
@@ -1273,14 +1278,7 @@ async function createWidget() {
     const widget = new ListWidget();
     widget.useDefaultPadding();
 
-    // Apply gradient background
-    const gradient = new LinearGradient();
-    gradient.colors = [
-        new Color(CONFIG.gradients[userGradient].top),
-        new Color(CONFIG.gradients[userGradient].bottom)
-    ];
-    gradient.locations = [0.0, 1.0];
-    widget.backgroundGradient = gradient;
+    applyGradientBackground(widget, userGradient);
 
     // Create main vertical stack for all widget content
     const mainStack = widget.addStack();
