@@ -841,6 +841,27 @@ async function askText({ title, message = "", defaultValue = "", placeholder = "
     return value;
 }
 
+// Shared line/platform filter prompts used by the Create and Edit preset wizards.
+function askLinesFilter(defaultValue = "") {
+    return askText({
+        title: "Lines (optional)",
+        message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
+        placeholder: defaultValue || "S1, S2, U3",
+        defaultValue,
+        isOptional: true
+    });
+}
+
+function askPlatformFilter(defaultValue = "") {
+    return askText({
+        title: "Platform (optional)",
+        message: "Filter by platform numbers (comma-separated), e.g. 1, 2.\nLeave empty to show all platforms.",
+        placeholder: defaultValue || "1, 2",
+        defaultValue,
+        isOptional: true
+    });
+}
+
 async function askGradient(defaultGradient = "black") {
     const alert = new Alert();
     alert.title = "Choose a color";
@@ -1650,22 +1671,10 @@ async function createSavedStation() {
     const station = await searchAndSelectStation(stationInput);
     if (station === null) return null;
 
-    const lines = await askText({
-        title: "Lines (optional)",
-        message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
-        placeholder: DEFAULT_STATION_LINES || "S1, S2, U3",
-        defaultValue: DEFAULT_STATION_LINES,
-        isOptional: true
-    });
+    const lines = await askLinesFilter(DEFAULT_STATION_LINES);
     if (lines === null) return null;
 
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: "Filter by platform numbers (comma-separated), e.g. 1, 2.\nLeave empty to show all platforms.",
-        placeholder: DEFAULT_STATION_PLATFORM || "1, 2",
-        defaultValue: DEFAULT_STATION_PLATFORM,
-        isOptional: true
-    });
+    const platform = await askPlatformFilter(DEFAULT_STATION_PLATFORM);
     if (platform === null) return null;
 
     const gradient = await askGradient();
@@ -1750,23 +1759,11 @@ async function editSavedStation() {
                 station = newStation;
             }
         } else if (fieldChoice === 1) {
-            const newLines = await askText({
-                title: "Lines (optional)",
-                message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
-                placeholder: lines || "S1, S2, U3",
-                defaultValue: lines,
-                isOptional: true
-            });
+            const newLines = await askLinesFilter(lines);
             if (newLines === null) return null;
             lines = newLines;
         } else if (fieldChoice === 2) {
-            const newPlatform = await askText({
-                title: "Platform (optional)",
-                message: "Filter by platform numbers (comma-separated), e.g. 1, 2.\nLeave empty to show all platforms.",
-                placeholder: platform || "1, 2",
-                defaultValue: platform,
-                isOptional: true
-            });
+            const newPlatform = await askPlatformFilter(platform);
             if (newPlatform === null) return null;
             platform = newPlatform;
         } else if (fieldChoice === 3) {
@@ -1963,15 +1960,16 @@ async function showSettingsStationDefaults() {
 // everything unchecked means no filter — search any nearby station.
 async function showSettingsStationTypes() {
     while (true) {
-        const actions = [
-            { id: "sbahn",       label: `🚇 S-Bahn: ${DEFAULT_STATION_TYPES.sbahn ? "✅" : "❌"}` },
-            { id: "ubahn",       label: `🚇 U-Bahn: ${DEFAULT_STATION_TYPES.ubahn ? "✅" : "❌"}` },
-            { id: "bus",         label: `🚌 Bus: ${DEFAULT_STATION_TYPES.bus ? "✅" : "❌"}` },
-            { id: "regionalBus", label: `🚌 Regional Bus: ${DEFAULT_STATION_TYPES.regionalBus ? "✅" : "❌"}` },
-            { id: "tram",        label: `🚊 Tram: ${DEFAULT_STATION_TYPES.tram ? "✅" : "❌"}` },
-            { id: "train",       label: `🚂 Train: ${DEFAULT_STATION_TYPES.train ? "✅" : "❌"}` },
-            { id: "back",        label: "← Back" },
-        ];
+        const typeEmoji = {
+            sbahn: "🚇", ubahn: "🚇", bus: "🚌",
+            regionalBus: "🚌", tram: "🚊", train: "🚂"
+        };
+        const actions = Object.keys(TRANSPORT_TYPE_LABELS).map(key => ({
+            id: key,
+            label: `${typeEmoji[key]} ${TRANSPORT_TYPE_LABELS[key]}: ${DEFAULT_STATION_TYPES[key] ? "✅" : "❌"}`
+        }));
+        actions.push({ id: "back", label: "← Back" });
+
         const action = await presentMenu({
             title: "Station Types",
             message: "Restrict Find Nearest Station to these types.\nLeave all unchecked to search any station.",
@@ -2046,6 +2044,31 @@ function getMainMenuActionForIndex(selectedIndex) {
 // MAIN EXECUTION
 // ============================================================================
 
+// Maps each main-menu action id to the handler that runs it (including any
+// follow-up logging/instructions). Unmapped ids (e.g. cancel) fall through.
+const MAIN_MENU_HANDLERS = {
+    [MAIN_MENU_ACTION.CREATE_SAVED_STATION]: async () => {
+        const savedProfile = await createSavedStation();
+        if (savedProfile) {
+            console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
+            await showPostCreateInstructions(savedProfile);
+        }
+    },
+    [MAIN_MENU_ACTION.EDIT_SAVED_STATION]: async () => {
+        const editedProfile = await editSavedStation();
+        if (editedProfile) console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
+    },
+    [MAIN_MENU_ACTION.VIEW_SAVED_STATION]: async () => {
+        const viewedProfile = await viewSavedStation();
+        if (viewedProfile) console.log('[INFO]   - Viewed saved station profile.');
+    },
+    // Find Nearest handles its own preview loop and optional save, so there is
+    // nothing to render afterwards.
+    [MAIN_MENU_ACTION.FIND_NEAREST_STATION]: () => findNearestStation(),
+    [MAIN_MENU_ACTION.SETTINGS]: () => showSettings(),
+    [MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET]: () => showHowToAddWidgetInstructions()
+};
+
 async function main() {
     console.log('[INFO] Munich Commute Widget script started');
     loadSettings();
@@ -2062,46 +2085,14 @@ async function main() {
     if (!config.runsInWidget && !launchedFromWidgetTap) {
         const menuChoice = await showMainMenu();
         const menuAction = getMainMenuActionForIndex(menuChoice);
+        const handler = MAIN_MENU_HANDLERS[menuAction];
 
-        if (menuAction === MAIN_MENU_ACTION.CREATE_SAVED_STATION) {
-            // Create Saved Station - wizard
-            const savedProfile = await createSavedStation();
-            if (savedProfile) {
-                console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
-                await showPostCreateInstructions(savedProfile);
-            }
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.EDIT_SAVED_STATION) {
-            // Edit Saved Station
-            const editedProfile = await editSavedStation();
-            if (editedProfile) {
-                console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
-            }
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.VIEW_SAVED_STATION) {
-            // View Saved Station - open selected profile in large size
-            const viewedProfile = await viewSavedStation();
-            if (viewedProfile) {
-                console.log('[INFO]   - Viewed saved station profile.');
-            }
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_STATION) {
-            // Find Nearest Station - wizard with geolocation. Respects the
-            // Station Types default from Settings (any station if unset).
-            // Handles its own preview loop and optional save, so nothing to render afterwards.
-            await findNearestStation();
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.SETTINGS) {
-            await showSettings();
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET) {
-            await showHowToAddWidgetInstructions();
-            return;
+        if (handler) {
+            await handler();
         } else {
-            // Cancelled
             console.log('[INFO]   - User cancelled main menu.');
-            return;
         }
+        return;
     } else if (launchedFromWidgetTap) {
         console.log('[INFO]   - Launched from widget tap, skipping menu and showing widget directly.');
     }
