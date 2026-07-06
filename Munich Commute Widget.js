@@ -408,6 +408,10 @@ function formatDepartureTime(timestamp) {
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 }
 
+function formatDistance(meters) {
+    return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${meters} m`;
+}
+
 function sanitizeProfileName(inputName) {
     return (inputName || "")
         .trim()
@@ -862,50 +866,24 @@ function askPlatformFilter(defaultValue = "") {
     });
 }
 
-async function askGradient(defaultGradient = "black") {
-    const alert = new Alert();
-    alert.title = "Choose a color";
-    alert.message = "Select the widget background color.";
+// Presents the gradient picker. With allowKeepCurrent, adds a "Continue"
+// action that keeps defaultGradient unchanged (used by the edit flow);
+// without it, there is no such shortcut (used by the create flow).
+async function askGradient(defaultGradient = "black", { allowKeepCurrent = false } = {}) {
+    const highlightSuffix = allowKeepCurrent ? " (current)" : " (default)";
+    const actions = AVAILABLE_GRADIENTS.map(g => ({
+        id: g.name,
+        label: `${g.emoji} ${g.label}${g.name === defaultGradient ? highlightSuffix : ""}`
+    }));
+    if (allowKeepCurrent) actions.push({ id: defaultGradient, label: "Continue" });
 
-    AVAILABLE_GRADIENTS.forEach(g => {
-        const displayLabel = `${g.emoji} ${g.label}`;
-        if (g.name === defaultGradient) {
-            alert.addAction(`${displayLabel} (default)`);
-        } else {
-            alert.addAction(displayLabel);
-        }
+    return presentMenu({
+        title: "Choose a color",
+        message: allowKeepCurrent
+            ? "Pick a new widget background color, or keep the current one."
+            : "Select the widget background color.",
+        actions
     });
-    alert.addCancelAction("Cancel");
-
-    const selectedIndex = await alert.presentSheet();
-    if (selectedIndex === -1) {
-        return null;
-    }
-
-    return AVAILABLE_GRADIENTS[selectedIndex].name;
-}
-
-async function askGradientOrKeepCurrent(defaultGradient = "black") {
-    const alert = new Alert();
-    alert.title = "Choose a color";
-    alert.message = "Pick a new widget background color, or keep the current one.";
-
-    AVAILABLE_GRADIENTS.forEach(g => {
-        const displayLabel = `${g.emoji} ${g.label}`;
-        if (g.name === defaultGradient) {
-            alert.addAction(`${displayLabel} (current)`);
-        } else {
-            alert.addAction(displayLabel);
-        }
-    });
-    alert.addAction("Continue");
-    alert.addCancelAction("Cancel");
-
-    const selectedIndex = await alert.presentSheet();
-    if (selectedIndex === -1) return null;
-    if (selectedIndex === AVAILABLE_GRADIENTS.length) return defaultGradient;
-
-    return AVAILABLE_GRADIENTS[selectedIndex].name;
 }
 
 function getWidgetSetupInstructions() {
@@ -942,19 +920,28 @@ function getPostCreateInstructions(parameterName) {
     Preset name already copied to clipboard`;
 }
 
-async function searchAndSelectStation(typedStation) {
-    const formattedStation = formatStationName(typedStation);
+// Looks up stations matching a name via the MVG locations API. Returns the
+// matching STATION entries, or null if the request itself failed (as opposed
+// to succeeding with zero matches).
+async function findStationsByName(stationName) {
+    const formattedStation = formatStationName(stationName);
     const url = `https://www.mvg.de/api/bgw-pt/v3/locations?query=${formattedStation}`;
-
-    let response;
     try {
-        response = await new Request(url).loadJSON();
+        const response = await new Request(url).loadJSON();
+        return response.filter(entry => entry.type === "STATION");
     } catch (e) {
+        console.log(`[ERROR] Failed to search stations: ${e.message}`);
+        return null;
+    }
+}
+
+async function searchAndSelectStation(typedStation) {
+    const stations = await findStationsByName(typedStation);
+
+    if (stations === null) {
         await showMessage("Network error", "Could not search for stations. Check your internet connection.");
         return null;
     }
-
-    const stations = response.filter(entry => entry.type === "STATION");
 
     if (stations.length === 0) {
         await showMessage("No station found", `No station found for "${typedStation}"`);
@@ -976,18 +963,8 @@ async function searchAndSelectStation(typedStation) {
 // ============================================================================
 
 async function getStationId(stationName) {
-    const formattedStation = formatStationName(stationName);
-    const url = `https://www.mvg.de/api/bgw-pt/v3/locations?query=${formattedStation}`;
-
-    let response;
-    try {
-        response = await new Request(url).loadJSON();
-    } catch (e) {
-        console.log(`[ERROR] Failed to fetch station ID: ${e.message}`);
-        return null;
-    }
-
-    const stations = response.filter(entry => entry.type === "STATION");
+    const stations = await findStationsByName(stationName);
+    if (stations === null) return null;
 
     // Prefer exact name match (case-insensitive)
     const exactMatch = stations.find(s => s.name.toLowerCase() === stationName.toLowerCase());
@@ -1071,10 +1048,13 @@ async function getCurrentLocationSafe() {
     }
 }
 
+function buildNearbyStationsUrl(latitude, longitude) {
+    return `https://www.mvg.de/api/bgw-pt/v3/stations/nearby?latitude=${latitude}&longitude=${longitude}`;
+}
+
 async function fetchNearbyStations(latitude, longitude) {
-    const url = `https://www.mvg.de/api/bgw-pt/v3/stations/nearby?latitude=${latitude}&longitude=${longitude}`;
     try {
-        const stations = await new Request(url).loadJSON();
+        const stations = await new Request(buildNearbyStationsUrl(latitude, longitude)).loadJSON();
         return Array.isArray(stations) ? stations : [];
     } catch (e) {
         console.log(`[ERROR] Failed to fetch nearby stations: ${e}`);
@@ -1466,12 +1446,9 @@ async function findNearestStation() {
     const userLon = location.longitude;
     console.log(`[INFO] Current location: ${userLat}, ${userLon}`);
 
-    // Use the proper nearby stations API endpoint
-    const url = `https://www.mvg.de/api/bgw-pt/v3/stations/nearby?latitude=${userLat}&longitude=${userLon}`;
-
     let stations;
     try {
-        stations = await new Request(url).loadJSON();
+        stations = await new Request(buildNearbyStationsUrl(userLat, userLon)).loadJSON();
     } catch (e) {
         await showMessage("Network error", "Could not search for nearby stations. Check your internet connection.");
         return null;
@@ -1505,29 +1482,21 @@ async function findNearestStation() {
     const cacheCandidate = pickNearestStation(stations, mode);
     if (cacheCandidate) saveNearestCache(mode, cacheCandidate);
 
-    // Show selection alert
-    const selectionAlert = new Alert();
-    selectionAlert.title = activeTypeCodes.length > 0 ? `Select Nearest ${typeLabel}` : "Select Nearest Station";
-    selectionAlert.message = `Found ${nearestStations.length} ${activeTypeCodes.length > 0 ? typeLabel + " " : ""}stations nearby:`;
-
-    nearestStations.forEach(station => {
-        const distance = station.distanceInMeters >= 1000
-            ? `${(station.distanceInMeters / 1000).toFixed(1)} km`
-            : `${station.distanceInMeters} m`;
-        selectionAlert.addAction(`${station.name} (${distance})`);
+    const selectedIndex = await presentMenu({
+        title: activeTypeCodes.length > 0 ? `Select Nearest ${typeLabel}` : "Select Nearest Station",
+        message: `Found ${nearestStations.length} ${activeTypeCodes.length > 0 ? typeLabel + " " : ""}stations nearby:`,
+        actions: nearestStations.map((station, index) => ({
+            id: index,
+            label: `${station.name} (${formatDistance(station.distanceInMeters)})`
+        }))
     });
-    selectionAlert.addCancelAction("Cancel");
-
-    const selectedIndex = await selectionAlert.presentSheet();
-    if (selectedIndex === -1) return null;
+    if (selectedIndex === null) return null;
 
     const nearestStation = nearestStations[selectedIndex].name;
     const selectedDistance = nearestStations[selectedIndex].distanceInMeters;
     console.log(`[INFO] Selected station: ${nearestStation} (${selectedDistance}m away)`);
 
-    const distanceLabel = selectedDistance >= 1000
-        ? `${(selectedDistance / 1000).toFixed(1)} km away`
-        : `${selectedDistance} m away`;
+    const distanceLabel = `${formatDistance(selectedDistance)} away`;
 
     const lines = DEFAULT_STATION_LINES;
     const platform = DEFAULT_STATION_PLATFORM;
@@ -1543,82 +1512,6 @@ async function findNearestStation() {
         initialLines: lines,
         initialPlatform: platform
     });
-}
-
-async function promptForStationSelection() {
-    // Parse default parameters to prefill the wizard
-    const defaultParams = DEFAULT_WIDGET_PARAMETERS.split(";");
-    let defaultStation = "Marienplatz";
-    let defaultPlatform = "";
-    let defaultLines = "";
-    let defaultGradient = "black";
-
-    defaultParams.forEach(param => {
-        const trimmedParam = param.trim();
-        if (!trimmedParam.includes(":")) {
-            defaultStation = trimmedParam;
-            return;
-        }
-
-        const [key, ...valueParts] = trimmedParam.split(":").map(part => part.trim());
-        const value = valueParts.join(":").trim();
-
-        switch (key.toLowerCase()) {
-            case "station":
-                defaultStation = value;
-                break;
-            case "platform":
-                defaultPlatform = value;
-                break;
-            case "lines":
-                defaultLines = value;
-                break;
-            case "gradient":
-            case "background":
-                defaultGradient = value;
-                break;
-        }
-    });
-
-    // Station selection
-    const stationInput = await askText({
-        title: "Station",
-        message: "Type the station name to search.",
-        placeholder: defaultStation,
-        defaultValue: defaultStation
-    });
-    if (stationInput === null) return null;
-
-    const station = await searchAndSelectStation(stationInput);
-    if (station === null) return null;
-
-    // Lines selection (optional)
-    const lines = await askText({
-        title: "Lines (optional)",
-        message: "Filter by specific lines, e.g. S3, S4.\nLeave empty to show all lines.",
-        placeholder: defaultLines || "S1, S2, U3",
-        defaultValue: defaultLines,
-        isOptional: true
-    });
-    if (lines === null) return null;
-
-    // Platform selection (optional)
-    const platform = await askText({
-        title: "Platform (optional)",
-        message: "Filter by platform numbers, e.g. 1, 2.\nLeave empty to show all platforms.",
-        placeholder: defaultPlatform || "1, 2",
-        defaultValue: defaultPlatform,
-        isOptional: true
-    });
-    if (platform === null) return null;
-
-    // Return a config object to apply to the widget (no gradient for Find Station)
-    return {
-        station: station,
-        platform: platform,
-        lines: lines,
-        gradient: defaultGradient // Use default gradient from config
-    };
 }
 
 async function persistPreset({ station, lines, platform, gradient, suggestedName }) {
@@ -1714,23 +1607,23 @@ async function editSavedStation() {
 
     // Parameter picker loop — user selects which field to edit
     while (true) {
-        const editMenu = new Alert();
-        editMenu.title = `Edit: ${profileName}`;
-        editMenu.message = "Select a parameter to edit:";
-        editMenu.addAction(`🚉 Station: ${station || "—"}`);
-        editMenu.addAction(`🚆 Lines: ${lines || "all"}`);
-        editMenu.addAction(`🛤 Platform: ${platform || "all"}`);
-        editMenu.addAction(`🎨 Gradient: ${gradient}`);
-        editMenu.addAction(`📝 Name: ${profileName}`);
-        editMenu.addAction("📋 Copy Preset Name");
-        editMenu.addDestructiveAction("🗑️ Delete Preset");
-        editMenu.addAction("✅ Save");
-        editMenu.addCancelAction("Cancel");
+        const fieldChoice = await presentMenu({
+            title: `Edit: ${profileName}`,
+            message: "Select a parameter to edit:",
+            actions: [
+                { id: "station", label: `🚉 Station: ${station || "—"}` },
+                { id: "lines", label: `🚆 Lines: ${lines || "all"}` },
+                { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
+                { id: "gradient", label: `🎨 Gradient: ${gradient}` },
+                { id: "name", label: `📝 Name: ${profileName}` },
+                { id: "copyName", label: "📋 Copy Preset Name" },
+                { id: "delete", label: "🗑️ Delete Preset", destructive: true },
+                { id: "save", label: "✅ Save" }
+            ]
+        });
+        if (fieldChoice === null) return null;
 
-        const fieldChoice = await editMenu.presentSheet();
-        if (fieldChoice === -1) return null;
-
-        if (fieldChoice === 0) {
+        if (fieldChoice === "station") {
             const stationInput = await askText({
                 title: "Station",
                 message: "Type the station name to search.",
@@ -1743,19 +1636,19 @@ async function editSavedStation() {
                 if (newStation === null) return null;
                 station = newStation;
             }
-        } else if (fieldChoice === 1) {
+        } else if (fieldChoice === "lines") {
             const newLines = await askLinesFilter(lines);
             if (newLines === null) return null;
             lines = newLines;
-        } else if (fieldChoice === 2) {
+        } else if (fieldChoice === "platform") {
             const newPlatform = await askPlatformFilter(platform);
             if (newPlatform === null) return null;
             platform = newPlatform;
-        } else if (fieldChoice === 3) {
-            const newGradient = await askGradientOrKeepCurrent(gradient);
+        } else if (fieldChoice === "gradient") {
+            const newGradient = await askGradient(gradient, { allowKeepCurrent: true });
             if (newGradient === null) return null;
             gradient = newGradient;
-        } else if (fieldChoice === 4) {
+        } else if (fieldChoice === "name") {
             const nameInput = await askText({
                 title: "Preset name",
                 message: "Change the name or press Continue to keep it.",
@@ -1764,14 +1657,13 @@ async function editSavedStation() {
             });
             if (nameInput === null) return null;
             profileName = sanitizeProfileName(nameInput) || profileName;
-        } else if (fieldChoice === 5) {
+        } else if (fieldChoice === "copyName") {
             Pasteboard.copy(profileName);
-        } else if (fieldChoice === 6) {
-            // Destructive "Delete Preset" action (added before "Save", so it is index 6).
+        } else if (fieldChoice === "delete") {
             const deleted = await confirmAndDeletePreset(profileDirectory, profileName);
             if (deleted) return null;
-        } else if (fieldChoice === 7) {
-            break; // Save
+        } else if (fieldChoice === "save") {
+            break;
         }
     }
 
