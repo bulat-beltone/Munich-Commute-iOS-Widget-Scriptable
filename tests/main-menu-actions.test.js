@@ -111,12 +111,14 @@ globalThis.__testExports = {
     pickNearestStation,
     NEAREST_MODE,
     NEAREST_TOKENS,
+    NEAREST_MODE_TOKEN,
     parseWidgetParameters,
     applyParsedWidgetParameters,
     normalizeWidgetSize,
     buildDeparturesFromScenario,
     shouldShowPlatformBadge,
-    buildNearestStationMenuActions
+    buildNearestStationMenuActions,
+    buildPresetParameterString
 };`, context, { filename: scriptPath });
 
     return context.__testExports;
@@ -358,6 +360,95 @@ test("buildNearestStationMenuActions reflects the current platform and line valu
     const withoutValues = buildNearestStationMenuActions("", "", false);
     assert.equal(withoutValues[0].label, "🛤 Platform: all");
     assert.equal(withoutValues[1].label, "🚆 Line: all");
+});
+
+test("buildPresetParameterString writes a plain station preset", () => {
+    const { buildPresetParameterString } = loadWidgetExports();
+
+    const result = buildPresetParameterString({
+        station: "Marienplatz",
+        lines: "S1, S2",
+        platform: "1",
+        gradient: "blue"
+    });
+
+    assert.equal(result, "station: Marienplatz; lines: S1, S2; platform: 1; gradient: blue");
+});
+
+test("buildPresetParameterString omits station and uses the bare 'nearest' token for the no-filter live-location mode", () => {
+    const { buildPresetParameterString, NEAREST_MODE } = loadWidgetExports();
+
+    const result = buildPresetParameterString({
+        station: "Marienplatz",
+        lines: "",
+        platform: "",
+        gradient: "black",
+        nearestMode: NEAREST_MODE.ANY
+    });
+
+    assert.equal(result, "nearest; gradient: black");
+    assert.equal(result.includes("station:"), false);
+});
+
+test("buildPresetParameterString round-trips through parseWidgetParameters back into ANY nearest mode", () => {
+    const { buildPresetParameterString, parseWidgetParameters, NEAREST_MODE } = loadWidgetExports();
+
+    const parameterString = buildPresetParameterString({
+        lines: "S3, S4",
+        platform: "2",
+        gradient: "teal",
+        nearestMode: NEAREST_MODE.ANY
+    });
+
+    const parsed = parseWidgetParameters(parameterString);
+    assert.equal(parsed.nearestMode, NEAREST_MODE.ANY);
+    assert.equal(parsed.hasExplicitStation, false);
+    assert.equal(Array.from(parsed.lines).join(","), "S3,S4");
+    assert.equal(Array.from(parsed.platforms).join(","), "2");
+    assert.equal(parsed.gradient, "teal");
+});
+
+test("buildPresetParameterString uses the canonical token for nearest-sbahn mode", () => {
+    const { buildPresetParameterString, NEAREST_MODE } = loadWidgetExports();
+
+    const result = buildPresetParameterString({
+        gradient: "black",
+        nearestMode: NEAREST_MODE.SBAHN
+    });
+
+    assert.equal(result, "nearest-sbahn; gradient: black");
+});
+
+test("buildPresetParameterString includes an optional test data file", () => {
+    const { buildPresetParameterString, NEAREST_MODE } = loadWidgetExports();
+
+    const result = buildPresetParameterString({
+        gradient: "black",
+        nearestMode: NEAREST_MODE.ANY,
+        testDataFile: "on-time-mix.json"
+    });
+
+    assert.equal(result, "nearest; gradient: black; test: on-time-mix.json");
+});
+
+test("NEAREST_MODE_TOKEN is the inverse of NEAREST_TOKENS for each mode", () => {
+    const { NEAREST_MODE_TOKEN, NEAREST_TOKENS, NEAREST_MODE } = loadWidgetExports();
+
+    assert.equal(NEAREST_MODE_TOKEN[NEAREST_MODE.ANY], "nearest");
+    assert.equal(NEAREST_MODE_TOKEN[NEAREST_MODE.SBAHN], "nearest-sbahn");
+    assert.equal(NEAREST_TOKENS[NEAREST_MODE_TOKEN[NEAREST_MODE.ANY]], NEAREST_MODE.ANY);
+    assert.equal(NEAREST_TOKENS[NEAREST_MODE_TOKEN[NEAREST_MODE.SBAHN]], NEAREST_MODE.SBAHN);
+});
+
+test("Create Preset wizard offers a 'Nearest (no filter)' station option", () => {
+    const source = fs.readFileSync(scriptPath, "utf8");
+
+    assert.ok(/askStationMode/.test(source), "askStationMode helper not found");
+    assert.ok(/📍 Nearest \(no filter\)/.test(source), "'Nearest (no filter)' label not found");
+
+    const createSavedStationMatch = source.match(/async function createSavedStation\(\) \{[\s\S]*?\n\}/);
+    assert.ok(createSavedStationMatch, "createSavedStation function not found");
+    assert.ok(/askStationMode\(\)/.test(createSavedStationMatch[0]), "createSavedStation does not offer the station mode picker");
 });
 
 test("Settings menu no longer exposes a Transport Types entry", () => {

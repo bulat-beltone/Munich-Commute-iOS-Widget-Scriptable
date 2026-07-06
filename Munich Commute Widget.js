@@ -117,6 +117,12 @@ const NEAREST_TOKENS = Object.freeze({
     "nearest-sbahn": NEAREST_MODE.SBAHN,
     "nearest-s-bahn": NEAREST_MODE.SBAHN
 });
+// Canonical widget-parameter token written back out for each mode (the
+// inverse of NEAREST_TOKENS) when a preset is saved for a live-location mode.
+const NEAREST_MODE_TOKEN = Object.freeze({
+    [NEAREST_MODE.ANY]: "nearest",
+    [NEAREST_MODE.SBAHN]: "nearest-sbahn"
+});
 const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
@@ -800,6 +806,23 @@ async function askText({ title, message = "", defaultValue = "", placeholder = "
     }
 
     return value;
+}
+
+// Lets the user pick between a specific, searched-for station and the live
+// "nearest station" mode (no station-type filter — matches the default,
+// unfiltered behavior of 🔎 Find Nearest Station / the `nearest` parameter).
+async function askStationMode() {
+    const alert = new Alert();
+    alert.title = "Station";
+    alert.message = "Search for a specific station, or always track the nearest one to your current location.";
+    alert.addAction("🔎 Search by Name");
+    alert.addAction("📍 Nearest (no filter)");
+    alert.addCancelAction("Cancel");
+
+    const selectedIndex = await alert.presentSheet();
+    if (selectedIndex === -1) return null;
+
+    return selectedIndex === 1 ? "nearest" : "search";
 }
 
 async function askGradient(defaultGradient = "black") {
@@ -1617,7 +1640,23 @@ async function promptForStationSelection() {
     };
 }
 
-async function persistPreset({ station, lines, platform, gradient, suggestedName }) {
+// Builds the widget-parameter string persisted to a preset file. When
+// `nearestMode` is set, the station is omitted entirely and the bare
+// live-location token (e.g. `nearest`) is used instead — the same format
+// documented for widget parameters — rather than a literal `station: nearest`,
+// which `parseWidgetParameters` would treat as a (non-existent) station name.
+function buildPresetParameterString({ station, lines, platform, gradient, nearestMode, testDataFile }) {
+    const parameterParts = nearestMode
+        ? [NEAREST_MODE_TOKEN[nearestMode] || NEAREST_MODE_TOKEN[NEAREST_MODE.ANY]]
+        : [`station: ${station}`];
+    if (lines) parameterParts.push(`lines: ${lines}`);
+    if (platform) parameterParts.push(`platform: ${platform}`);
+    parameterParts.push(`gradient: ${gradient || "black"}`);
+    if (testDataFile) parameterParts.push(`test: ${testDataFile}`);
+    return parameterParts.join("; ");
+}
+
+async function persistPreset({ station, lines, platform, gradient, suggestedName, nearestMode }) {
     const profileNameInput = await askText({
         title: "Preset name",
         message: "Give this preset a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
@@ -1636,30 +1675,35 @@ async function persistPreset({ station, lines, platform, gradient, suggestedName
         return null;
     }
 
-    const parameterParts = [`station: ${station}`];
-    if (lines) parameterParts.push(`lines: ${lines}`);
-    if (platform) parameterParts.push(`platform: ${platform}`);
-    parameterParts.push(`gradient: ${gradient || "black"}`);
+    const parameterString = buildPresetParameterString({ station, lines, platform, gradient, nearestMode });
 
     const fileManager = FileManager.iCloud();
     const profileDirectory = ensureAppDirectory();
     const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
-    fileManager.writeString(profilePath, parameterParts.join("; "));
+    fileManager.writeString(profilePath, parameterString);
 
     Pasteboard.copy(profileName);
     return profileName;
 }
 
 async function createSavedStation() {
-    const stationInput = await askText({
-        title: "Station",
-        message: "Type the station name to search.",
-        placeholder: "Marienplatz"
-    });
-    if (stationInput === null) return null;
+    const stationMode = await askStationMode();
+    if (stationMode === null) return null;
 
-    const station = await searchAndSelectStation(stationInput);
-    if (station === null) return null;
+    const useNearest = stationMode === "nearest";
+    let station = null;
+
+    if (!useNearest) {
+        const stationInput = await askText({
+            title: "Station",
+            message: "Type the station name to search.",
+            placeholder: "Marienplatz"
+        });
+        if (stationInput === null) return null;
+
+        station = await searchAndSelectStation(stationInput);
+        if (station === null) return null;
+    }
 
     const lines = await askText({
         title: "Lines (optional)",
@@ -1682,14 +1726,22 @@ async function createSavedStation() {
     const gradient = await askGradient();
     if (gradient === null) return null;
 
-    const profileName = await persistPreset({ station, lines, platform, gradient, suggestedName: station });
+    const nearestMode = useNearest ? NEAREST_MODE.ANY : null;
+    const profileName = await persistPreset({
+        station,
+        lines,
+        platform,
+        gradient,
+        nearestMode,
+        suggestedName: useNearest ? "Nearest" : station
+    });
     if (profileName === null) return null;
 
-    // Show widget preview directly
-    userStation = station;
-    userPlatforms = parsePlatformFilter(platform);
-    userLines = parseLineFilter(lines);
-    if (CONFIG.gradients[gradient]) userGradient = gradient;
+    // Show widget preview directly, reusing the same parse/apply pipeline
+    // used for widget parameters so live-location resolution kicks in.
+    applyParsedWidgetParameters(parseWidgetParameters(
+        buildPresetParameterString({ station, lines, platform, gradient, nearestMode })
+    ));
 
     const previousWidgetFamily = config.widgetFamily;
     config.widgetFamily = "large";
@@ -1798,6 +1850,7 @@ async function editSavedStation() {
     // Parse existing values
     const existingParams = parseWidgetParameters(content);
     let station = existingParams.station;
+    let presetNearestMode = existingParams.nearestMode || null;
     let platform = existingParams.platforms ? existingParams.platforms.join(", ") : "";
     let lines = existingParams.lines ? existingParams.lines.join(", ") : "";
     let gradient = existingParams.gradient;
@@ -1807,10 +1860,11 @@ async function editSavedStation() {
 
     // Parameter picker loop — user selects which field to edit
     while (true) {
+        const stationLabel = presetNearestMode ? "📍 Nearest (no filter)" : (station || "—");
         const editMenu = new Alert();
         editMenu.title = `Edit: ${profileName}`;
         editMenu.message = "Select a parameter to edit:";
-        editMenu.addAction(`🚉 Station: ${station || "—"}`);
+        editMenu.addAction(`🚉 Station: ${stationLabel}`);
         editMenu.addAction(`🚆 Lines: ${lines || "all"}`);
         editMenu.addAction(`🛤 Platform: ${platform || "all"}`);
         editMenu.addAction(`🎨 Gradient: ${gradient}`);
@@ -1824,17 +1878,32 @@ async function editSavedStation() {
         if (fieldChoice === -1) return null;
 
         if (fieldChoice === 0) {
-            const stationInput = await askText({
-                title: "Station",
-                message: "Type the station name to search.",
-                placeholder: station,
-                defaultValue: station
-            });
-            if (stationInput === null) return null;
-            if (stationInput !== station) {
-                const newStation = await searchAndSelectStation(stationInput);
-                if (newStation === null) return null;
-                station = newStation;
+            const stationMode = await askStationMode();
+            if (stationMode === null) continue; // Picker cancelled — stay in the menu.
+
+            if (stationMode === "nearest") {
+                presetNearestMode = NEAREST_MODE.ANY;
+                station = null;
+            } else {
+                // If the preset was previously in live-location mode there's no
+                // concrete station to compare against, so force a real search
+                // instead of silently accepting the "Marienplatz" placeholder.
+                const previousStation = presetNearestMode ? null : station;
+                const stationInput = await askText({
+                    title: "Station",
+                    message: "Type the station name to search.",
+                    placeholder: previousStation || "Marienplatz",
+                    defaultValue: previousStation || ""
+                });
+                if (stationInput === null) return null;
+                if (stationInput === previousStation) {
+                    station = previousStation;
+                } else {
+                    const newStation = await searchAndSelectStation(stationInput);
+                    if (newStation === null) return null;
+                    station = newStation;
+                }
+                presetNearestMode = null;
             }
         } else if (fieldChoice === 1) {
             const newLines = await askText({
@@ -1890,20 +1959,23 @@ async function editSavedStation() {
         return null;
     }
 
-    const parameterParts = [`station: ${station}`];
-    if (lines) parameterParts.push(`lines: ${lines}`);
-    if (platform) parameterParts.push(`platform: ${platform}`);
-    parameterParts.push(`gradient: ${gradient}`);
-    if (testDataFile) parameterParts.push(`test: ${testDataFile}`);
+    const parameterString = buildPresetParameterString({
+        station,
+        lines,
+        platform,
+        gradient,
+        nearestMode: presetNearestMode,
+        testDataFile
+    });
 
-    fileManager.writeString(updatedProfilePath, parameterParts.join("; "));
+    fileManager.writeString(updatedProfilePath, parameterString);
     if (profileName !== originalProfileName) {
         fileManager.remove(originalProfilePath);
     }
     Pasteboard.copy(profileName);
 
     // Show widget preview directly
-    applyParsedWidgetParameters(parseWidgetParameters(parameterParts.join("; ")));
+    applyParsedWidgetParameters(parseWidgetParameters(parameterString));
 
     const previousWidgetFamily = config.widgetFamily;
     config.widgetFamily = "large";
