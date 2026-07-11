@@ -363,6 +363,33 @@ This project is open source and available under standard usage terms.
 - Original MVG widget concept by [eckertj](https://github.com/eckertj/MVG-Abfahrtsmonitor) and contributors.
 - Thanks to the Munich public transport API (mvg.de) for providing real-time data.
 
+## Development
+
+Scriptable only runs a single script file, so `Munich Commute Widget.js` at
+the repo root is a **generated build artifact**. The actual source is split
+into topic-based modules under [`src/`](src/) (config, colors, parsing,
+rendering, wizard flows, etc.), and [`build.js`](build.js) concatenates them
+back into one file — the same approach you'd use to bundle several source
+files into a single `code.js` for a Figma plugin.
+
+After editing anything under `src/`, rebuild the bundled script:
+
+```bash
+npm run build
+# or: node build.js
+```
+
+`deploy.sh` runs the build automatically before copying the script to
+Scriptable's iCloud folder. `npm test` (which runs `tests/build.test.js`)
+fails if `Munich Commute Widget.js` and `src/` ever drift out of sync, so a
+forgotten rebuild gets caught before it ships. `npm run verify-build` does
+the same check via `git diff --exit-code`, handy in CI.
+
+Module load order matters — some sections run top-level statements (e.g.
+building the line-matched gradients into `CONFIG.gradients`, or parsing the
+widget parameter string) that later sections depend on. The order is defined
+once, explicitly, in the `MODULES` list in `build.js`.
+
 ## Related Projects
 
 This widget is inspired by and builds upon the work of other Munich public transport widgets for Scriptable:
