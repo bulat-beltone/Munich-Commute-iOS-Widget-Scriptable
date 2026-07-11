@@ -8,6 +8,11 @@
 - Decision: turn the two live-location modes into built-in presets ("Nearest" = `nearest`, no filter; "Nearest S-Bahn" = `nearest-sbahn`, since S-Bahn is the natural "filtered nearest" default and needs no arbitrary line guessing) that are created automatically the first time the app runs, so they show up in 👀 View Preset / ✏️ Edit Preset immediately. Removed the "📍 Nearest (no filter)" option from the ➕ Create Preset / ✏️ Edit Preset station picker (editing Station now always searches by name), and removed the Station Types Settings default entirely since it existed only to support that removed wizard option and `Find Nearest Station`'s type filter (which now always searches unfiltered).
 - Implemented `ensureDefaultPresets` (guarded by a persisted `defaultPresetsSeeded` flag so deleted defaults don't reappear), removed `askStationMode`/`DEFAULT_STATION_TYPES`/`showSettingsStationTypes`, added `getNearestModeStationLabel` for correct ANY vs S-Bahn labeling in Edit Preset, and updated README/SCENARIOS docs plus regression tests.
 
+### 2026-07-11 (follow-up)
+- User liked the "Find Nearest" option in Create Preset and asked to bring it back, but fixed: it should show a list of nearby stations and let the user pick, not auto-choose one.
+- Reinstated `askStationMode` (relabeled "📍 Find Nearest" instead of the old, misleading "📍 Nearest (no filter)") in both Create Preset and Edit Preset's Station field. Extracted the nearby-station lookup/list/selection logic out of `findNearestStation` into a shared `pickNearbyStationByLocation` helper so the wizard option and the standalone 🔎 Find Nearest Station flow behave identically (real list, real choice, graceful handling of location/network failures — never an automatic pick).
+- Crucially, this "Find Nearest" wizard option resolves to a concrete, fixed station (like search-by-name) — it does not create a live-location `nearest`/`nearest-sbahn` preset. That dynamic, always-tracking behavior remains exclusively the built-in `Nearest` / `Nearest S-Bahn` presets from the earlier change.
+
 ## Cancelled train rendering
 
 ### 2026-06-30

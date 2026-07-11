@@ -229,6 +229,77 @@ globalThis.__testExports = {
     return { exports: context.__testExports, files };
 }
 
+// Like loadWidgetExportsWithAlertResponses, but also mocks Location.current()
+// and Request#loadJSON() so pickNearbyStationByLocation (and anything built
+// on it) can be exercised end-to-end: location failures, network failures,
+// empty results, and picking a specific entry from the nearby-station list.
+function loadWidgetExportsForNearbyPicker({ locationError = false, stations = null, selectedIndex } = {}) {
+    const mocks = createScriptableMocks();
+    const queue = selectedIndex === undefined ? [] : [selectedIndex];
+
+    class QueueAlert {
+        constructor() {
+            this.title = "";
+            this.message = "";
+            this.actions = [];
+        }
+
+        addAction(title) {
+            this.actions.push(title);
+        }
+
+        addDestructiveAction(title) {
+            this.actions.push(title);
+        }
+
+        addCancelAction(title) {
+            this.cancelAction = title;
+        }
+
+        addTextField() {}
+
+        async presentAlert() {
+            return 0;
+        }
+
+        async presentSheet() {
+            return queue.length ? queue.shift() : -1;
+        }
+
+        textFieldValue() {
+            return "";
+        }
+    }
+
+    mocks.Alert = QueueAlert;
+    mocks.Location = {
+        setAccuracyToHundredMeters: () => {},
+        current: async () => {
+            if (locationError) throw new Error("Location access denied");
+            return { latitude: 48.14, longitude: 11.58 };
+        }
+    };
+    mocks.Request = class {
+        constructor(url) {
+            this.url = url;
+        }
+
+        async loadJSON() {
+            if (stations === null) throw new Error("Network error");
+            return stations;
+        }
+    };
+
+    const source = fs.readFileSync(scriptPath, "utf8")
+        .replace(/\nawait main\(\);\nScript\.complete\(\);\s*$/, "");
+
+    const context = vm.createContext(mocks);
+    vm.runInContext(`${source}
+globalThis.__testExports = { pickNearbyStationByLocation };`, context, { filename: scriptPath });
+
+    return context.__testExports;
+}
+
 // Exercises the "apply Settings line/platform defaults for a nearest-mode
 // widget" logic (applyNearestDefaultsIfNeeded, called from createWidget())
 // directly, without building a full ListWidget UI. `scenario` is a raw JS
@@ -361,6 +432,47 @@ test("pickNearestStation returns null when no station matches", () => {
 
     assert.equal(pickNearestStation([], NEAREST_MODE.ANY), null);
     assert.equal(pickNearestStation([{ name: "Bus", transportTypes: ["BUS"] }], NEAREST_MODE.SBAHN), null);
+});
+
+test("pickNearbyStationByLocation returns null when location access fails", async () => {
+    const { pickNearbyStationByLocation } = loadWidgetExportsForNearbyPicker({ locationError: true });
+
+    const result = await pickNearbyStationByLocation();
+    assert.equal(result, null);
+});
+
+test("pickNearbyStationByLocation returns null when the nearby-stations request fails", async () => {
+    const { pickNearbyStationByLocation } = loadWidgetExportsForNearbyPicker({ stations: null });
+
+    const result = await pickNearbyStationByLocation();
+    assert.equal(result, null);
+});
+
+test("pickNearbyStationByLocation returns null when nothing is nearby", async () => {
+    const { pickNearbyStationByLocation } = loadWidgetExportsForNearbyPicker({ stations: [] });
+
+    const result = await pickNearbyStationByLocation();
+    assert.equal(result, null);
+});
+
+test("pickNearbyStationByLocation returns null when the user cancels the list instead of auto-picking one", async () => {
+    const stations = [{ name: "Closest", globalId: "c1", distanceInMeters: 50, transportTypes: ["BUS"] }];
+    const { pickNearbyStationByLocation } = loadWidgetExportsForNearbyPicker({ stations });
+
+    const result = await pickNearbyStationByLocation();
+    assert.equal(result, null);
+});
+
+test("pickNearbyStationByLocation returns whichever station the user actually selected from the list, not just the closest one", async () => {
+    const stations = [
+        { name: "Closest", globalId: "c1", distanceInMeters: 50, transportTypes: ["BUS"] },
+        { name: "Second Closest", globalId: "s2", distanceInMeters: 150, transportTypes: ["SBAHN"] }
+    ];
+    const { pickNearbyStationByLocation } = loadWidgetExportsForNearbyPicker({ stations, selectedIndex: 1 });
+
+    const result = await pickNearbyStationByLocation();
+    assert.equal(result.name, "Second Closest");
+    assert.equal(result.distanceInMeters, 150);
 });
 
 test("nearest tokens map to the correct resolution mode", () => {
@@ -624,20 +736,42 @@ test("NEAREST_MODE_TOKEN is the inverse of NEAREST_TOKENS for each mode", () => 
     assert.equal(NEAREST_TOKENS[NEAREST_MODE_TOKEN[NEAREST_MODE.SBAHN]], NEAREST_MODE.SBAHN);
 });
 
-test("Create Preset wizard no longer offers an interactive 'nearest' station-mode picker", () => {
-    // Regression test for: choosing "Nearest (no filter)" in the Create
-    // Preset wizard silently re-applied the (now-removed) Station Types
-    // Settings default instead of truly showing "no filter", and there was
-    // no way to actually choose/preview which nearby station would be used.
-    // The live-location modes are now only available as the built-in
-    // "Nearest" / "Nearest S-Bahn" presets (see ensureDefaultPresets).
+test("Create Preset wizard offers a '📍 Find Nearest' station option that resolves to a concrete station", () => {
+    // Regression test for: the old "Nearest (no filter)" option silently
+    // re-applied the (now-removed) Station Types Settings default instead of
+    // truly showing "no filter", and gave no way to actually choose/preview
+    // which nearby station would be used — it just auto-picked one. "Find
+    // Nearest" is back, but now it always shows a real list (via
+    // pickNearbyStationByLocation, shared with 🔎 Find Nearest Station) and
+    // resolves to a fixed station, same as searching by name — it does not
+    // create a live-location preset. That mode is only available via the
+    // built-in "Nearest" / "Nearest S-Bahn" presets (see ensureDefaultPresets).
     const source = fs.readFileSync(scriptPath, "utf8");
 
-    assert.equal(/askStationMode/.test(source), false, "askStationMode helper should have been removed");
+    const askStationModeMatch = source.match(/function askStationMode\(\) \{[\s\S]*?\n\}/);
+    assert.ok(askStationModeMatch, "askStationMode helper not found");
+    assert.ok(/📍 Find Nearest/.test(askStationModeMatch[0]), "'📍 Find Nearest' label not found");
+    // The old, misleading "Nearest (no filter)" wizard *option* is gone — that
+    // exact label may still appear elsewhere (getNearestModeStationLabel uses
+    // it to describe an existing live-location preset's Station field), just
+    // not as a choice offered by this picker.
+    assert.equal(/📍 Nearest \(no filter\)/.test(askStationModeMatch[0]), false, "the old, misleading 'Nearest (no filter)' option should be gone from the picker");
 
     const createSavedStationMatch = source.match(/async function createSavedStation\(\) \{[\s\S]*?\n\}/);
     assert.ok(createSavedStationMatch, "createSavedStation function not found");
-    assert.equal(/nearestMode/.test(createSavedStationMatch[0]), false, "createSavedStation should no longer deal with nearestMode");
+    assert.ok(/askStationMode\(\)/.test(createSavedStationMatch[0]), "createSavedStation does not offer the station mode picker");
+    assert.ok(/pickNearbyStationByLocation/.test(createSavedStationMatch[0]), "createSavedStation does not use pickNearbyStationByLocation");
+    assert.equal(/nearestMode/.test(createSavedStationMatch[0]), false, "createSavedStation should not create a live-location preset");
+});
+
+test("pickNearbyStationByLocation and findNearestStation share the same nearby-station picker", () => {
+    const source = fs.readFileSync(scriptPath, "utf8");
+
+    assert.ok(/async function pickNearbyStationByLocation\(\)/.test(source), "pickNearbyStationByLocation helper not found");
+
+    const findNearestStationMatch = source.match(/async function findNearestStation\(\) \{[\s\S]*?\n\}/);
+    assert.ok(findNearestStationMatch, "findNearestStation function not found");
+    assert.ok(/pickNearbyStationByLocation\(\)/.test(findNearestStationMatch[0]), "findNearestStation does not reuse pickNearbyStationByLocation");
 });
 
 test("ensureDefaultPresets creates the built-in 'Nearest' and 'Nearest S-Bahn' presets", () => {
