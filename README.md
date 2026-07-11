@@ -64,11 +64,15 @@ Like any preset, you can rename either one or change its Lines / Platform / Grad
 #### ➕ Create Preset
 A wizard to create a reusable station configuration:
 
-1. **Station** — Search and select from MVG stations
+1. **Station** — Either:
+   - **🔎 Search by Name** — search and select from MVG stations, or
+   - **📍 Find Nearest** — uses your current location to list nearby stations (with distance) and lets you pick one from that list, exactly like **🔎 Find Nearest Station** — it never auto-picks a station for you
 2. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
 3. **Platform** (optional) — Filter by platform number
 4. **Color** — Choose a background gradient
 5. **Preset name** — A short name like "Home" or "Work"
+
+Either way, the result is a **fixed station** saved into the preset — this is a one-time lookup to help you pick a nearby station, not a live-tracking mode. For a widget that always follows your current location, use the built-in `Nearest` / `Nearest S-Bahn` presets described below instead.
 
 After saving:
 - The preset name is **copied to your clipboard**
@@ -78,7 +82,7 @@ After saving:
 #### ✏️ Edit Preset
 Select an existing preset to change any of its fields, or delete it:
 
-- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset. Editing **Station** always searches for a specific station by name — if the preset was one of the built-in live-location presets (or any other `nearest`/`nearest-sbahn` preset), editing Station switches it to that searched station instead
+- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset, including the choice between **🔎 Search by Name** and **📍 Find Nearest**. If the preset was one of the built-in live-location presets (or any other `nearest`/`nearest-sbahn` preset), editing Station always switches it to whichever fixed station you search for or pick from the nearby list
 - **Test data** (optional) — point at a JSON file in `Munich Commute/TestData/` to preview the widget with fixed fixture departures instead of live API data (see [Test data preview](#-test-data-preview) below)
 - **🗑️ Delete Preset** — a destructive action in the same menu; confirms before permanently removing the preset file
 
@@ -90,7 +94,7 @@ Select a preset to preview it as a widget. By default this opens at large size, 
 #### 🔎 Find Nearest Station
 Shows live departures for a nearby station without saving anything:
 
-1. Your location is used to find any nearby stations within range (unfiltered by type — use the built-in **Nearest S-Bahn** preset instead if you only ever want S-Bahn stops)
+1. Your location is used to find any nearby stations within range (unfiltered by type — use the built-in **Nearest S-Bahn** preset instead if you only ever want S-Bahn stops). This is the same nearby-station list used by **📍 Find Nearest** in Create/Edit Preset.
 2. Select a station from the list
 3. The widget preview opens immediately with live departures (using any saved Line/Platform defaults from Settings)
 4. Once you close the preview, a filter/action menu appears:

@@ -1018,6 +1018,23 @@ function askPlatformFilter(defaultValue = "") {
     });
 }
 
+// Lets the user pick between typing a station name and finding one via GPS
+// (📍 Find Nearest shows a real list of nearby stations to choose from —
+// see pickNearbyStationByLocation — it never auto-picks one). Either way,
+// the result is a concrete, fixed station; the live-location "always track
+// the closest station" behavior lives in the built-in "Nearest" / "Nearest
+// S-Bahn" presets instead (see ensureDefaultPresets).
+function askStationMode() {
+    return presentMenu({
+        title: "Station",
+        message: "Search for a station by name, or find the nearest one to your current location and pick from the list.",
+        actions: [
+            { id: "search", label: "🔎 Search by Name" },
+            { id: "findNearest", label: "📍 Find Nearest" }
+        ]
+    });
+}
+
 // Presents the gradient picker. With allowKeepCurrent, adds a "Continue"
 // action that keeps defaultGradient unchanged (used by the edit flow);
 // without it, there is no such shortcut (used by the create flow).
@@ -1619,10 +1636,15 @@ async function runNearestStationMenu({ stationName, messagePrefix, initialLines,
     }
 }
 
-async function findNearestStation() {
-    const mode = NEAREST_MODE.ANY;
-
-    // Request location permission and get current location
+// Requests the current location, looks up nearby stations, and lets the
+// user pick one from a real list (with distances) — never an automatic,
+// invisible pick. Also primes the "nearest" live-location cache with the
+// actual closest match. Returns { name, distanceInMeters } or null if
+// location/network fails, nothing is nearby, or the user cancels. Shared by
+// 🔎 Find Nearest Station and the 📍 Find Nearest station-mode option in
+// Create/Edit Preset, so both offer the exact same "see the list, choose"
+// behavior.
+async function pickNearbyStationByLocation() {
     Location.setAccuracyToHundredMeters();
     let location;
     try {
@@ -1632,13 +1654,11 @@ async function findNearestStation() {
         return null;
     }
 
-    const userLat = location.latitude;
-    const userLon = location.longitude;
-    console.log(`[INFO] Current location: ${userLat}, ${userLon}`);
+    console.log(`[INFO] Current location: ${location.latitude}, ${location.longitude}`);
 
     let stations;
     try {
-        stations = await new Request(buildNearbyStationsUrl(userLat, userLon)).loadJSON();
+        stations = await new Request(buildNearbyStationsUrl(location.latitude, location.longitude)).loadJSON();
     } catch (e) {
         await showMessage("Network error", "Could not search for nearby stations. Check your internet connection.");
         return null;
@@ -1656,8 +1676,8 @@ async function findNearestStation() {
 
     // Prime the widget cache with the closest match so the "nearest"
     // widget parameter has a fallback when it cannot get a live GPS fix.
-    const cacheCandidate = pickNearestStation(stations, mode);
-    if (cacheCandidate) saveNearestCache(mode, cacheCandidate);
+    const cacheCandidate = pickNearestStation(stations, NEAREST_MODE.ANY);
+    if (cacheCandidate) saveNearestCache(NEAREST_MODE.ANY, cacheCandidate);
 
     const selectedIndex = await presentMenu({
         title: "Select Nearest Station",
@@ -1669,11 +1689,17 @@ async function findNearestStation() {
     });
     if (selectedIndex === null) return null;
 
-    const nearestStation = nearestStations[selectedIndex].name;
-    const selectedDistance = nearestStations[selectedIndex].distanceInMeters;
-    console.log(`[INFO] Selected station: ${nearestStation} (${selectedDistance}m away)`);
+    const picked = nearestStations[selectedIndex];
+    console.log(`[INFO] Selected station: ${picked.name} (${picked.distanceInMeters}m away)`);
 
-    const distanceLabel = `${formatDistance(selectedDistance)} away`;
+    return { name: picked.name, distanceInMeters: picked.distanceInMeters };
+}
+
+async function findNearestStation() {
+    const picked = await pickNearbyStationByLocation();
+    if (picked === null) return null;
+
+    const distanceLabel = `${formatDistance(picked.distanceInMeters)} away`;
 
     const lines = DEFAULT_STATION_LINES;
     const platform = DEFAULT_STATION_PLATFORM;
@@ -1681,10 +1707,10 @@ async function findNearestStation() {
     // Show the selected station right away with its (possibly empty) default
     // filter. The filter/action menu only appears once this preview is
     // closed, so the user sees real departures before being asked anything.
-    await presentNearestPreview(nearestStation, lines, platform);
+    await presentNearestPreview(picked.name, lines, platform);
 
     return await runNearestStationMenu({
-        stationName: nearestStation,
+        stationName: picked.name,
         messagePrefix: `${distanceLabel}.`,
         initialLines: lines,
         initialPlatform: platform
@@ -1715,21 +1741,33 @@ async function persistPreset({ station, lines, platform, gradient, suggestedName
     return profileName;
 }
 
-// Creates a preset for a specific, searched-for station. The live-location
-// "nearest" / "nearest-sbahn" modes are no longer created through this
-// wizard — they ship as the built-in "Nearest" / "Nearest S-Bahn" presets
-// (see ensureDefaultPresets) so they're discoverable in View/Edit Preset
-// without needing to know the widget-parameter syntax.
+// Creates a preset for a specific station, either searched for by name or
+// picked from a real list of nearby stations (📍 Find Nearest). Either way
+// the result is a concrete, fixed station — the live-location "always track
+// the closest station" modes are no longer created through this wizard;
+// they ship as the built-in "Nearest" / "Nearest S-Bahn" presets (see
+// ensureDefaultPresets) so they're discoverable in View/Edit Preset without
+// needing to know the widget-parameter syntax.
 async function createSavedStation() {
-    const stationInput = await askText({
-        title: "Station",
-        message: "Type the station name to search.",
-        placeholder: "Marienplatz"
-    });
-    if (stationInput === null) return null;
+    const stationMode = await askStationMode();
+    if (stationMode === null) return null;
 
-    const station = await searchAndSelectStation(stationInput);
-    if (station === null) return null;
+    let station;
+    if (stationMode === "findNearest") {
+        const picked = await pickNearbyStationByLocation();
+        if (picked === null) return null;
+        station = picked.name;
+    } else {
+        const stationInput = await askText({
+            title: "Station",
+            message: "Type the station name to search.",
+            placeholder: "Marienplatz"
+        });
+        if (stationInput === null) return null;
+
+        station = await searchAndSelectStation(stationInput);
+        if (station === null) return null;
+    }
 
     const lines = await askLinesFilter(DEFAULT_STATION_LINES);
     if (lines === null) return null;
@@ -1814,27 +1852,37 @@ async function editSavedStation() {
         if (fieldChoice === null) return null;
 
         if (fieldChoice === "station") {
-            // Editing the station always means searching for a specific one —
-            // live-location mode (if the preset had it) is left behind. The
-            // "Nearest" / "Nearest S-Bahn" built-in presets are the supported
-            // way to get live-location behavior; see ensureDefaultPresets.
-            // If the preset was previously in live-location mode there's no
-            // concrete station to compare against, so force a real search
-            // instead of silently accepting the "Marienplatz" placeholder.
-            const previousStation = presetNearestMode ? null : station;
-            const stationInput = await askText({
-                title: "Station",
-                message: "Type the station name to search.",
-                placeholder: previousStation || "Marienplatz",
-                defaultValue: previousStation || ""
-            });
-            if (stationInput === null) return null;
-            if (stationInput === previousStation) {
-                station = previousStation;
+            // Editing the station always results in a concrete, fixed
+            // station — live-location mode (if the preset had it) is left
+            // behind either way. The "Nearest" / "Nearest S-Bahn" built-in
+            // presets are the supported way to get live-location behavior;
+            // see ensureDefaultPresets.
+            const stationMode = await askStationMode();
+            if (stationMode === null) continue; // Picker cancelled — stay in the menu.
+
+            if (stationMode === "findNearest") {
+                const picked = await pickNearbyStationByLocation();
+                if (picked === null) continue; // Location/network error or cancelled — stay in the menu.
+                station = picked.name;
             } else {
-                const newStation = await searchAndSelectStation(stationInput);
-                if (newStation === null) return null;
-                station = newStation;
+                // If the preset was previously in live-location mode there's no
+                // concrete station to compare against, so force a real search
+                // instead of silently accepting the "Marienplatz" placeholder.
+                const previousStation = presetNearestMode ? null : station;
+                const stationInput = await askText({
+                    title: "Station",
+                    message: "Type the station name to search.",
+                    placeholder: previousStation || "Marienplatz",
+                    defaultValue: previousStation || ""
+                });
+                if (stationInput === null) return null;
+                if (stationInput === previousStation) {
+                    station = previousStation;
+                } else {
+                    const newStation = await searchAndSelectStation(stationInput);
+                    if (newStation === null) return null;
+                    station = newStation;
+                }
             }
             presetNearestMode = null;
         } else if (fieldChoice === "lines") {

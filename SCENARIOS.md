@@ -22,7 +22,9 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 **Scenario:** runs the widget → goes through the wizard → adds the widget to the home screen.
 
-- [ ] `➕ Create Preset`: search for a station → select exact match
+- [ ] `➕ Create Preset`: choose **🔎 Search by Name** or **📍 Find Nearest**
+- [ ] Search by Name: search for a station → select exact match
+- [ ] Find Nearest: location requested → list of nearby stations with distance shown → user picks one (never auto-picked)
 - [ ] Line filter (optional)
 - [ ] Platform filter (optional)
 - [ ] Choose colour (gradient)
@@ -34,7 +36,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] "Add to Home Screen" instructions shown
 - [ ] Widget added to home screen with the preset name as the parameter
 
-**Status:** ✅ `createSavedStation` wizard + `getPostCreateInstructions`. Line-matched gradient suggestions via `getLineGradientSuggestions` (S-Bahn, U-Bahn except U7/U8, and Bus/Regional Bus/Tram). The station step always searches by name — the live-location modes are covered by the built-in "Nearest" / "Nearest S-Bahn" presets instead (see 5c).
+**Status:** ✅ `createSavedStation` wizard + `getPostCreateInstructions`. Line-matched gradient suggestions via `getLineGradientSuggestions` (S-Bahn, U-Bahn except U7/U8, and Bus/Regional Bus/Tram). The station step offers **🔎 Search by Name** and **📍 Find Nearest** (via `askStationMode` + `pickNearbyStationByLocation`, shared with `🔎 Find Nearest Station`) — either way the result is a fixed station, never a live-location mode. The live-location modes are covered by the built-in "Nearest" / "Nearest S-Bahn" presets instead (see 5a).
 
 ---
 
@@ -81,18 +83,17 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ## 5a. Built-in "Nearest" Presets (replaces the old Station Types Settings default)
 
-**Scenario:** a first-time user should get the live-location "nearest station" feature without knowing the `nearest`/`nearest-sbahn` widget-parameter syntax, and without going through a dedicated wizard step. Previously, **➕ Create Preset** offered a **📍 Nearest (no filter)** station option, but it silently re-applied the (then-existing) Station Types Settings default — so "no filter" wasn't actually true, and there was no way to preview/choose among nearby stations the way `🔎 Find Nearest Station` does. That Settings default and the wizard option have both been removed; two ready-made presets take their place.
+**Scenario:** a first-time user should get the live-location "nearest station" feature without knowing the `nearest`/`nearest-sbahn` widget-parameter syntax, and without going through a dedicated wizard step. Previously, **➕ Create Preset** offered a **📍 Nearest (no filter)** station option, but it silently re-applied the (then-existing) Station Types Settings default — so "no filter" wasn't actually true, and there was no way to preview/choose among nearby stations the way `🔎 Find Nearest Station` does. That Settings default has been removed; two ready-made presets take its place as the discoverable entry point for live-location tracking. (The Create/Edit Preset wizard's own "find a nearby station" option was reinstated separately — see 5d — but it resolves to a fixed station via a real list, not a live-location mode.)
 
 - [ ] On first launch of the interactive menu, two presets exist automatically: `Nearest` and `Nearest S-Bahn` — visible immediately in **👀 View Preset** / **✏️ Edit Preset**, no user action required
 - [ ] `Nearest` contains the bare `nearest` token — truly unfiltered, any nearby station
 - [ ] `Nearest S-Bahn` contains the bare `nearest-sbahn` token — closest S-Bahn station
 - [ ] Both are freely editable like any other preset: Lines / Platform / Gradient / Name can all be changed via **✏️ Edit Preset**
 - [ ] Deleting one via **🗑️ Delete Preset** does not bring it back on a later launch (guarded by `defaultPresetsSeeded` in `Settings.json`, set once ever)
-- [ ] `➕ Create Preset` no longer offers a live-location station option — the Station step always searches by name
 - [ ] **⚙️ Settings → Station Defaults** no longer has a `🚉 Station Types` entry; only **Lines** / **Platform** remain
 - [ ] `🔎 Find Nearest Station` and the `nearest` live-location token always search **any** nearby station, unfiltered (no Settings-level type restriction exists any more)
 
-**Status:** ✅ `ensureDefaultPresets`, `DEFAULT_PRESET_DEFINITIONS`, `DEFAULT_PRESETS_SEEDED`. `askStationMode`, `DEFAULT_STATION_TYPES`, and `showSettingsStationTypes` have been removed.
+**Status:** ✅ `ensureDefaultPresets`, `DEFAULT_PRESET_DEFINITIONS`, `DEFAULT_PRESETS_SEEDED`. `DEFAULT_STATION_TYPES` and `showSettingsStationTypes` have been removed.
 
 ---
 
@@ -117,10 +118,26 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 **Scenario:** a user opens **✏️ Edit Preset** on the built-in `Nearest` or `Nearest S-Bahn` preset (or any other preset using the `nearest`/`nearest-sbahn` token) and taps the **Station** field.
 
 - [ ] `✏️ Edit Preset` shows `🚉 Station: 📍 Nearest (no filter)` for an ANY-mode live-location preset, and `🚉 Station: 📍 Nearest S-Bahn` for an SBAHN-mode one
-- [ ] Tapping **Station** always prompts a station-name search (there is no "keep live-location mode" branch any more) and converts the preset to that searched station, leaving live-location mode behind
+- [ ] Tapping **Station** offers the same **🔎 Search by Name** / **📍 Find Nearest** choice as Create Preset (there is no "keep live-location mode" branch any more) and converts the preset to whichever fixed station results, leaving live-location mode behind
 - [ ] The rest of the fields (Lines / Platform / Gradient / Name) behave the same as for a regular station preset
 
 **Status:** ✅ `getNearestModeStationLabel`, `buildPresetParameterString`, `NEAREST_MODE_TOKEN`, wired into `editSavedStation`.
+
+---
+
+## 5d. "📍 Find Nearest" in Create/Edit Preset (reinstated, but resolves via a real list)
+
+**Scenario:** a user creating or editing a preset wants to pick a nearby station without typing its name, the same way **🔎 Find Nearest Station** works — see a list of nearby stations with distances, and choose one. This option previously existed as **📍 Nearest (no filter)**, but that version auto-picked a station via live GPS resolution on every widget refresh (and silently applied the — now removed — Station Types Settings default); it was removed and reinstated as this simpler, list-based picker that resolves to one fixed station at creation/edit time.
+
+- [ ] `➕ Create Preset` → Station step offers **🔎 Search by Name** and **📍 Find Nearest**
+- [ ] Choosing **📍 Find Nearest** requests location, fetches nearby stations, and shows a list with distances — same list/UX as `🔎 Find Nearest Station`
+- [ ] Selecting a station from that list uses it as a normal, fixed preset station (no `nearest`/`nearest-sbahn` token is written)
+- [ ] Location error / network error / no nearby stations / cancelling the list are all handled gracefully — none of them fall back to auto-picking a station
+- [ ] Lines / Platform / Gradient / Name steps behave the same as for a regular, searched-for station preset
+- [ ] `✏️ Edit Preset` → **Station** field offers the same **🔎 Search by Name** / **📍 Find Nearest** choice
+- [ ] The same nearby-station picker (and its GPS-cache-priming side effect for the `nearest` live-location token) is shared between this wizard option and `🔎 Find Nearest Station`, so behavior is identical between the two
+
+**Status:** ✅ `askStationMode`, `pickNearbyStationByLocation`, wired into `createSavedStation`, `editSavedStation`, and `findNearestStation`.
 
 ---
 
