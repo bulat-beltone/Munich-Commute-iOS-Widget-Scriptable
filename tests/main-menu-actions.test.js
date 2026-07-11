@@ -120,6 +120,9 @@ globalThis.__testExports = {
     buildNearestStationMenuActions,
     buildPresetParameterString,
     getLineGradientSuggestions,
+    getNearestModeStationLabel,
+    DEFAULT_PRESET_DEFINITIONS,
+    ensureDefaultPresets,
     CONFIG,
     LINE_COLORS,
     askGradient,
@@ -182,13 +185,48 @@ function loadWidgetExportsWithAlertResponses(responses) {
     vm.runInContext(`${source}
 globalThis.__testExports = {
     askGradient,
-    askStationMode,
     getLineGradientSuggestions,
     CONFIG,
     AVAILABLE_GRADIENTS
 };`, context, { filename: scriptPath });
 
     return { exports: context.__testExports, presentedAlerts };
+}
+
+// Like loadWidgetExports, but backs FileManager.iCloud() with an in-memory
+// Map so filesystem-touching functions (ensureDefaultPresets, settings
+// persistence, ...) can be exercised and their writes inspected.
+function loadWidgetExportsWithFileSystem() {
+    const files = new Map();
+    const mocks = createScriptableMocks();
+    mocks.FileManager = {
+        iCloud: () => ({
+            documentsDirectory: () => "/tmp",
+            joinPath: (...parts) => parts.join("/"),
+            fileExists: p => files.has(p),
+            listContents: dir => Array.from(files.keys())
+                .filter(p => p.startsWith(`${dir}/`) && !p.slice(dir.length + 1).includes("/"))
+                .map(p => p.slice(dir.length + 1)),
+            readString: p => files.get(p) ?? "",
+            writeString: (p, content) => files.set(p, content),
+            createDirectory: () => {},
+            remove: p => files.delete(p)
+        })
+    };
+
+    const source = fs.readFileSync(scriptPath, "utf8")
+        .replace(/\nawait main\(\);\nScript\.complete\(\);\s*$/, "");
+
+    const context = vm.createContext(mocks);
+    vm.runInContext(`${source}
+globalThis.__testExports = {
+    ensureDefaultPresets,
+    DEFAULT_PRESET_DEFINITIONS,
+    NEAREST_MODE,
+    parseWidgetParameters
+};`, context, { filename: scriptPath });
+
+    return { exports: context.__testExports, files };
 }
 
 // Exercises the "apply Settings line/platform defaults for a nearest-mode
@@ -460,6 +498,31 @@ test("Settings menu no longer exposes a Transport Types entry", () => {
     assert.equal(/showSettingsTransportTypes/.test(source), false);
 });
 
+test("Settings no longer exposes a Station Types default (it was only used for the removed nearest-mode picker)", () => {
+    // Regression test for: the Station Types Settings default silently
+    // narrowed "Nearest (no filter)" presets/parameters to whatever types
+    // were configured there, contradicting the "no filter" label. It's
+    // superseded by the "Nearest" (truly unfiltered) and "Nearest S-Bahn"
+    // built-in presets, so the setting itself has been removed.
+    const source = fs.readFileSync(scriptPath, "utf8");
+
+    assert.equal(/DEFAULT_STATION_TYPES/.test(source), false, "DEFAULT_STATION_TYPES should have been removed");
+    assert.equal(/showSettingsStationTypes/.test(source), false, "showSettingsStationTypes should have been removed");
+    assert.equal(/🚉 Station Types/.test(source), false, "'Station Types' Settings entry should have been removed");
+});
+
+test("pickNearestStation in ANY mode is never filtered by type, even without a Settings default", () => {
+    const { pickNearestStation, NEAREST_MODE } = loadWidgetExports();
+
+    const stations = [
+        { name: "Bus Stop", globalId: "b1", transportTypes: ["BUS"], distanceInMeters: 20 },
+        { name: "Tram Stop", globalId: "t1", transportTypes: ["TRAM"], distanceInMeters: 50 }
+    ];
+
+    const nearest = pickNearestStation(stations, NEAREST_MODE.ANY);
+    assert.equal(nearest.name, "Bus Stop");
+});
+
 test("buildDeparturesFromScenario converts test fixture rows into departure objects", () => {
     const { buildDeparturesFromScenario } = loadWidgetExports();
 
@@ -561,15 +624,72 @@ test("NEAREST_MODE_TOKEN is the inverse of NEAREST_TOKENS for each mode", () => 
     assert.equal(NEAREST_TOKENS[NEAREST_MODE_TOKEN[NEAREST_MODE.SBAHN]], NEAREST_MODE.SBAHN);
 });
 
-test("Create Preset wizard offers a 'Nearest (no filter)' station option", () => {
+test("Create Preset wizard no longer offers an interactive 'nearest' station-mode picker", () => {
+    // Regression test for: choosing "Nearest (no filter)" in the Create
+    // Preset wizard silently re-applied the (now-removed) Station Types
+    // Settings default instead of truly showing "no filter", and there was
+    // no way to actually choose/preview which nearby station would be used.
+    // The live-location modes are now only available as the built-in
+    // "Nearest" / "Nearest S-Bahn" presets (see ensureDefaultPresets).
     const source = fs.readFileSync(scriptPath, "utf8");
 
-    assert.ok(/askStationMode/.test(source), "askStationMode helper not found");
-    assert.ok(/📍 Nearest \(no filter\)/.test(source), "'Nearest (no filter)' label not found");
+    assert.equal(/askStationMode/.test(source), false, "askStationMode helper should have been removed");
 
     const createSavedStationMatch = source.match(/async function createSavedStation\(\) \{[\s\S]*?\n\}/);
     assert.ok(createSavedStationMatch, "createSavedStation function not found");
-    assert.ok(/askStationMode\(\)/.test(createSavedStationMatch[0]), "createSavedStation does not offer the station mode picker");
+    assert.equal(/nearestMode/.test(createSavedStationMatch[0]), false, "createSavedStation should no longer deal with nearestMode");
+});
+
+test("ensureDefaultPresets creates the built-in 'Nearest' and 'Nearest S-Bahn' presets", () => {
+    const { exports, files } = loadWidgetExportsWithFileSystem();
+    const { ensureDefaultPresets, DEFAULT_PRESET_DEFINITIONS, NEAREST_MODE, parseWidgetParameters } = exports;
+
+    assert.deepEqual(Array.from(DEFAULT_PRESET_DEFINITIONS, p => p.name), ["Nearest", "Nearest S-Bahn"]);
+    assert.equal(DEFAULT_PRESET_DEFINITIONS[0].nearestMode, NEAREST_MODE.ANY);
+    assert.equal(DEFAULT_PRESET_DEFINITIONS[1].nearestMode, NEAREST_MODE.SBAHN);
+
+    ensureDefaultPresets();
+
+    const nearestFile = files.get("/tmp/Munich Commute/Nearest.txt");
+    const nearestSbahnFile = files.get("/tmp/Munich Commute/Nearest S-Bahn.txt");
+    assert.ok(nearestFile, "Nearest.txt should have been created");
+    assert.ok(nearestSbahnFile, "Nearest S-Bahn.txt should have been created");
+
+    const nearestParsed = parseWidgetParameters(nearestFile);
+    assert.equal(nearestParsed.nearestMode, NEAREST_MODE.ANY);
+    assert.equal(nearestParsed.hasExplicitStation, false);
+
+    const nearestSbahnParsed = parseWidgetParameters(nearestSbahnFile);
+    assert.equal(nearestSbahnParsed.nearestMode, NEAREST_MODE.SBAHN);
+
+    // Settings.json should now record that the defaults were seeded.
+    const settings = JSON.parse(files.get("/tmp/Munich Commute/Settings.json"));
+    assert.equal(settings.defaultPresetsSeeded, true);
+});
+
+test("ensureDefaultPresets does not recreate a preset the user deleted, once already seeded", () => {
+    const { exports, files } = loadWidgetExportsWithFileSystem();
+    const { ensureDefaultPresets } = exports;
+
+    ensureDefaultPresets();
+    assert.ok(files.has("/tmp/Munich Commute/Nearest.txt"));
+
+    // User deletes the "Nearest" preset via Edit Preset.
+    files.delete("/tmp/Munich Commute/Nearest.txt");
+
+    // A later call within the same run (guarded by the in-memory
+    // DEFAULT_PRESETS_SEEDED flag, mirroring a fresh script run that already
+    // persisted defaultPresetsSeeded: true in Settings.json) must not bring it back.
+    ensureDefaultPresets();
+    assert.equal(files.has("/tmp/Munich Commute/Nearest.txt"), false);
+});
+
+test("getNearestModeStationLabel distinguishes ANY and S-Bahn live-location modes", () => {
+    const { getNearestModeStationLabel, NEAREST_MODE } = loadWidgetExports();
+
+    assert.equal(getNearestModeStationLabel(NEAREST_MODE.ANY), "📍 Nearest (no filter)");
+    assert.equal(getNearestModeStationLabel(NEAREST_MODE.SBAHN), "📍 Nearest S-Bahn");
+    assert.equal(getNearestModeStationLabel(null), null);
 });
 
 test("getLineGradientSuggestions suggests a match for a single filtered S-Bahn line", () => {

@@ -7,7 +7,7 @@ Works based on Scriptable app.
 
 - **Filtering** by transport types or platform
 - **All transport types** supported (S-Bahn, U-Bahn, Bus, Tram, Regional trains)
-- **Nearest station in the widget** — a widget that always tracks the closest station (or closest **S-Bahn**) to your current location
+- **Nearest station in the widget** — a widget that always tracks the closest station (or closest **S-Bahn**) to your current location, available immediately as built-in `Nearest` / `Nearest S-Bahn` presets
 - **Real-time departures** using official MVV API
 - **Actual arrival time** always shown in white — delayed and on-time departures use the same simple display
 - **Platform badge** — a small rounded, translucent-white square shows which platform each departure uses; hidden only when your filter already narrows things down to a single platform
@@ -42,7 +42,7 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 
 | Action | Description |
 |--------|-------------|
-| 🔎 Find Nearest Station | Show departures for the nearest station using GPS (respects the **Station Types** default in Settings, if configured) |
+| 🔎 Find Nearest Station | Show departures for the nearest station using GPS |
 | ➕ Create Preset | Save a station configuration to a file for use as a widget |
 | 👀 View Preset | Preview a preset as a widget (at its saved size, or an overridden size) |
 | ✏️ Edit Preset | Edit a preset's configuration, or delete it |
@@ -51,12 +51,20 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 
 > Deleting a preset is done from **✏️ Edit Preset** — select the preset, then tap the destructive **🗑️ Delete Preset** action in the edit menu.
 
+#### 📍 Built-in "Nearest" presets
+Two presets are created automatically the first time you open the app, so the live-location feature (see [📍 Nearest station widget (live location)](#-nearest-station-widget-live-location) below) is discoverable straight away in **👀 View Preset** / **✏️ Edit Preset** — no need to type a widget parameter or hunt for it in a wizard:
+
+| Preset | Behaviour |
+|--------|-----------|
+| `Nearest` | Closest station of any type, no line/platform filter |
+| `Nearest S-Bahn` | Closest station served by the **S-Bahn** |
+
+Like any preset, you can rename either one or change its Lines / Platform / Gradient via **✏️ Edit Preset**. If you delete one, it won't come back automatically — recreate it by hand-editing a preset file with the `nearest` / `nearest-sbahn` token if you ever need to (see the parameter table below).
+
 #### ➕ Create Preset
 A wizard to create a reusable station configuration:
 
-1. **Station** — Either:
-   - **🔎 Search by Name** — search and select from MVG stations, or
-   - **📍 Nearest (no filter)** — always track the closest station to your current location when the widget refreshes, exactly like the `nearest` live-location parameter (see [📍 Nearest station widget (live location)](#-nearest-station-widget-live-location) below) — no station-type filter is applied beyond your **Station Types** default in Settings, if configured
+1. **Station** — Search and select from MVG stations
 2. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
 3. **Platform** (optional) — Filter by platform number
 4. **Color** — Choose a background gradient
@@ -70,7 +78,7 @@ After saving:
 #### ✏️ Edit Preset
 Select an existing preset to change any of its fields, or delete it:
 
-- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset, including the choice between **🔎 Search by Name** and **📍 Nearest (no filter)**
+- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset. Editing **Station** always searches for a specific station by name — if the preset was one of the built-in live-location presets (or any other `nearest`/`nearest-sbahn` preset), editing Station switches it to that searched station instead
 - **Test data** (optional) — point at a JSON file in `Munich Commute/TestData/` to preview the widget with fixed fixture departures instead of live API data (see [Test data preview](#-test-data-preview) below)
 - **🗑️ Delete Preset** — a destructive action in the same menu; confirms before permanently removing the preset file
 
@@ -82,8 +90,7 @@ Select a preset to preview it as a widget. By default this opens at large size, 
 #### 🔎 Find Nearest Station
 Shows live departures for a nearby station without saving anything:
 
-1. Your location is used to find stations within range
-   - If a **Station Types** default is configured in Settings (⚙️ Settings → Station Defaults → 🚉 Station Types), the list is restricted to those types (e.g. S-Bahn only). Leave it unset to search any nearby station.
+1. Your location is used to find any nearby stations within range (unfiltered by type — use the built-in **Nearest S-Bahn** preset instead if you only ever want S-Bahn stops)
 2. Select a station from the list
 3. The widget preview opens immediately with live departures (using any saved Line/Platform defaults from Settings)
 4. Once you close the preview, a filter/action menu appears:
@@ -104,20 +111,18 @@ Instead of a fixed station, you can set the widget **Parameter** to a live-locat
 | `nearest-sbahn` | Closest station served by the **S-Bahn** |
 
 How it works:
-- On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match (`nearest` respects the **Station Types** default from Settings if configured, otherwise any station; `nearest-sbahn` always restricts to stations whose transport types include `SBAHN`, regardless of that setting).
+- On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match (`nearest` searches **any** nearby station, unfiltered; `nearest-sbahn` always restricts to stations whose transport types include `SBAHN`).
 - In this mode the header shows a 📍 location icon and the title reads **Nearest: [station]** so it's clear the station is chosen automatically.
 - The resolved station is cached. iOS heavily restricts GPS access while a widget refreshes in the background, so if a live fix isn't available the widget falls back to the **last known** nearest station instead of showing an error.
 - Run **🔎 Find Nearest Station** from the app once to grant location permission and seed that cache.
-- The **Station Defaults** (Station Types / Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. only search S-Bahn stops and only show `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override the line/platform default.
+- The **Station Defaults** (Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. always show only `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override the default.
 - You can combine the token with a gradient in a preset file, e.g. `nearest-sbahn; gradient: blue`.
-- The `nearest` (no filter) variant can be created directly from **➕ Create Preset** / **✏️ Edit Preset** by choosing **📍 Nearest (no filter)** instead of searching for a station name — no manual file editing needed.
+- Both variants are already set up for you as built-in presets — see [📍 Built-in "Nearest" presets](#-built-in-nearest-presets) above — so there's normally no need to hand-edit a preset file for this at all.
 
 #### ⚙️ Settings
 Accessible from the main menu. Changes save immediately — no Save button needed.
 
-- **Station Defaults** — Defaults applied when using **🔎 Find Nearest Station**:
-  - **Station Types** — Restrict the nearby-station search itself to S-Bahn / U-Bahn / Bus / Regional Bus / Tram / Train. Leave everything unchecked to search any nearby station.
-  - **Lines** / **Platform** — Pre-filled line and platform filters once a station is picked
+- **Station Defaults** — Pre-filled **Lines** / **Platform** filters used by **🔎 Find Nearest Station** and **➕ Create Preset**
 - **Subtract Minutes** — Subtract N minutes from all departure times (useful for walk time)
 - **Show Subtracted Minutes** — Show the "-N" offset indicator in the widget header
 
@@ -236,6 +241,8 @@ All widget data is stored in a single folder inside the Scriptable iCloud folder
 
 ```
 iCloud Drive/Scriptable/Munich Commute/
+├── Nearest.txt                   ← built-in preset (created automatically)
+├── Nearest S-Bahn.txt            ← built-in preset (created automatically)
 ├── Home.txt                      ← preset
 ├── Work.txt                      ← preset
 ├── Settings.json                 ← transport types, subtract minutes, Find Nearest defaults
