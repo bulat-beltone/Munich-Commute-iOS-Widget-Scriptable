@@ -117,6 +117,12 @@ const NEAREST_TOKENS = Object.freeze({
     "nearest-sbahn": NEAREST_MODE.SBAHN,
     "nearest-s-bahn": NEAREST_MODE.SBAHN
 });
+// Canonical widget-parameter token written back out for each mode (the
+// inverse of NEAREST_TOKENS) when a preset is saved for a live-location mode.
+const NEAREST_MODE_TOKEN = Object.freeze({
+    [NEAREST_MODE.ANY]: "nearest",
+    [NEAREST_MODE.SBAHN]: "nearest-sbahn"
+});
 const WIDGET_SETUP_VIDEO_URL = "https://www.youtube.com/results?search_query=scriptable+widget+setup";
 const AVAILABLE_GRADIENTS = [
     { name: "black", label: "Black", emoji: "⚫" },
@@ -1025,6 +1031,20 @@ function askPlatformFilter(defaultValue = "") {
     });
 }
 
+// Lets the user pick between a specific, searched-for station and the live
+// "nearest station" mode (no station-type filter — matches the default,
+// unfiltered behavior of 🔎 Find Nearest Station / the `nearest` parameter).
+function askStationMode() {
+    return presentMenu({
+        title: "Station",
+        message: "Search for a specific station, or always track the nearest one to your current location.",
+        actions: [
+            { id: "search", label: "🔎 Search by Name" },
+            { id: "nearest", label: "📍 Nearest (no filter)" }
+        ]
+    });
+}
+
 // Presents the gradient picker. With allowKeepCurrent, adds a "Continue"
 // action that keeps defaultGradient unchanged (used by the edit flow);
 // without it, there is no such shortcut (used by the create flow).
@@ -1703,7 +1723,7 @@ async function findNearestStation() {
     });
 }
 
-async function persistPreset({ station, lines, platform, gradient, suggestedName }) {
+async function persistPreset({ station, lines, platform, gradient, suggestedName, nearestMode }) {
     const profileNameInput = await askText({
         title: "Preset name",
         message: "Give this preset a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
@@ -1721,22 +1741,30 @@ async function persistPreset({ station, lines, platform, gradient, suggestedName
     const fileManager = FileManager.iCloud();
     const profileDirectory = ensureAppDirectory();
     const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
-    fileManager.writeString(profilePath, buildParameterString({ station, lines, platform, gradient }));
+    fileManager.writeString(profilePath, buildPresetParameterString({ station, lines, platform, gradient, nearestMode }));
 
     Pasteboard.copy(profileName);
     return profileName;
 }
 
 async function createSavedStation() {
-    const stationInput = await askText({
-        title: "Station",
-        message: "Type the station name to search.",
-        placeholder: "Marienplatz"
-    });
-    if (stationInput === null) return null;
+    const stationMode = await askStationMode();
+    if (stationMode === null) return null;
 
-    const station = await searchAndSelectStation(stationInput);
-    if (station === null) return null;
+    const useNearest = stationMode === "nearest";
+    let station = null;
+
+    if (!useNearest) {
+        const stationInput = await askText({
+            title: "Station",
+            message: "Type the station name to search.",
+            placeholder: "Marienplatz"
+        });
+        if (stationInput === null) return null;
+
+        station = await searchAndSelectStation(stationInput);
+        if (station === null) return null;
+    }
 
     const lines = await askLinesFilter(DEFAULT_STATION_LINES);
     if (lines === null) return null;
@@ -1747,14 +1775,22 @@ async function createSavedStation() {
     const gradient = await askGradient("black", { suggestions: getLineGradientSuggestions(lines) });
     if (gradient === null) return null;
 
-    const profileName = await persistPreset({ station, lines, platform, gradient, suggestedName: station });
+    const nearestMode = useNearest ? NEAREST_MODE.ANY : null;
+    const profileName = await persistPreset({
+        station,
+        lines,
+        platform,
+        gradient,
+        nearestMode,
+        suggestedName: useNearest ? "Nearest" : station
+    });
     if (profileName === null) return null;
 
-    // Show widget preview directly
-    userStation = station;
-    userPlatforms = parsePlatformFilter(platform);
-    userLines = parseLineFilter(lines);
-    if (CONFIG.gradients[gradient]) userGradient = gradient;
+    // Show widget preview directly, reusing the same parse/apply pipeline
+    // used for widget parameters so live-location resolution kicks in.
+    applyParsedWidgetParameters(parseWidgetParameters(
+        buildPresetParameterString({ station, lines, platform, gradient, nearestMode })
+    ));
 
     await previewWidget("large");
 
@@ -1787,6 +1823,7 @@ async function editSavedStation() {
     // Parse existing values
     const existingParams = parseWidgetParameters(content);
     let station = existingParams.station;
+    let presetNearestMode = existingParams.nearestMode || null;
     let platform = existingParams.platforms ? existingParams.platforms.join(", ") : "";
     let lines = existingParams.lines ? existingParams.lines.join(", ") : "";
     let gradient = existingParams.gradient;
@@ -1796,11 +1833,12 @@ async function editSavedStation() {
 
     // Parameter picker loop — user selects which field to edit
     while (true) {
+        const stationLabel = presetNearestMode ? "📍 Nearest (no filter)" : (station || "—");
         const fieldChoice = await presentMenu({
             title: `Edit: ${profileName}`,
             message: "Select a parameter to edit:",
             actions: [
-                { id: "station", label: `🚉 Station: ${station || "—"}` },
+                { id: "station", label: `🚉 Station: ${stationLabel}` },
                 { id: "lines", label: `🚆 Lines: ${lines || "all"}` },
                 { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
                 { id: "gradient", label: `🎨 Gradient: ${gradient}` },
@@ -1813,17 +1851,32 @@ async function editSavedStation() {
         if (fieldChoice === null) return null;
 
         if (fieldChoice === "station") {
-            const stationInput = await askText({
-                title: "Station",
-                message: "Type the station name to search.",
-                placeholder: station,
-                defaultValue: station
-            });
-            if (stationInput === null) return null;
-            if (stationInput !== station) {
-                const newStation = await searchAndSelectStation(stationInput);
-                if (newStation === null) return null;
-                station = newStation;
+            const stationMode = await askStationMode();
+            if (stationMode === null) continue; // Picker cancelled — stay in the menu.
+
+            if (stationMode === "nearest") {
+                presetNearestMode = NEAREST_MODE.ANY;
+                station = null;
+            } else {
+                // If the preset was previously in live-location mode there's no
+                // concrete station to compare against, so force a real search
+                // instead of silently accepting the "Marienplatz" placeholder.
+                const previousStation = presetNearestMode ? null : station;
+                const stationInput = await askText({
+                    title: "Station",
+                    message: "Type the station name to search.",
+                    placeholder: previousStation || "Marienplatz",
+                    defaultValue: previousStation || ""
+                });
+                if (stationInput === null) return null;
+                if (stationInput === previousStation) {
+                    station = previousStation;
+                } else {
+                    const newStation = await searchAndSelectStation(stationInput);
+                    if (newStation === null) return null;
+                    station = newStation;
+                }
+                presetNearestMode = null;
             }
         } else if (fieldChoice === "lines") {
             const newLines = await askLinesFilter(lines);
@@ -1862,7 +1915,14 @@ async function editSavedStation() {
         return null;
     }
 
-    const parameterString = buildParameterString({ station, lines, platform, gradient, testDataFile });
+    const parameterString = buildPresetParameterString({
+        station,
+        lines,
+        platform,
+        gradient,
+        nearestMode: presetNearestMode,
+        testDataFile
+    });
 
     fileManager.writeString(updatedProfilePath, parameterString);
     if (profileName !== originalProfileName) {
@@ -1902,8 +1962,14 @@ function getAppDirectory() {
 }
 
 // Serializes a preset into the "key: value; ..." widget parameter string.
-function buildParameterString({ station, lines, platform, gradient, testDataFile }) {
-    const parts = [`station: ${station}`];
+// When `nearestMode` is set, the station is omitted entirely and the bare
+// live-location token (e.g. `nearest`) is used instead — the same format
+// documented for widget parameters — rather than a literal `station: nearest`,
+// which `parseWidgetParameters` would treat as a (non-existent) station name.
+function buildPresetParameterString({ station, lines, platform, gradient, nearestMode, testDataFile }) {
+    const parts = nearestMode
+        ? [NEAREST_MODE_TOKEN[nearestMode] || NEAREST_MODE_TOKEN[NEAREST_MODE.ANY]]
+        : [`station: ${station}`];
     if (lines) parts.push(`lines: ${lines}`);
     if (platform) parts.push(`platform: ${platform}`);
     parts.push(`gradient: ${gradient || "black"}`);
