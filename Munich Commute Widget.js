@@ -21,16 +21,9 @@ let SHOW_SUBTRACT_MINUTES = true; // Show "-X" indicator in widget header
 let DEFAULT_STATION_LINES = "";
 let DEFAULT_STATION_PLATFORM = "";
 
-// Restricts which station types "Find Nearest Station" searches for (set to
-// false/leave all false to search any nearby station regardless of type).
-const DEFAULT_STATION_TYPES = {
-    sbahn: false,
-    ubahn: false,
-    bus: false,
-    regionalBus: false,
-    tram: false,
-    train: false
-};
+// Guards ensureDefaultPresets() so the built-in presets are only created
+// once ever, even if the user later deletes one of them.
+let DEFAULT_PRESETS_SEEDED = false;
 
 // Transport types to display (set to false to hide a type)
 const TRANSPORT_TYPES = {
@@ -57,24 +50,6 @@ function getEnabledTypeCodes(typesConfig) {
     return Object.entries(typesConfig)
         .filter(([_, enabled]) => enabled)
         .map(([type]) => TRANSPORT_TYPE_API_CODES[type]);
-}
-
-const TRANSPORT_TYPE_LABELS = {
-    sbahn: "S-Bahn",
-    ubahn: "U-Bahn",
-    bus: "Bus",
-    regionalBus: "Regional Bus",
-    tram: "Tram",
-    train: "Train"
-};
-
-// Human-readable summary of enabled types, e.g. "S-Bahn, Tram", or "any" when
-// none are enabled (no filter).
-function getStationTypesSummaryLabel(typesConfig) {
-    const enabledLabels = Object.entries(typesConfig)
-        .filter(([_, enabled]) => enabled)
-        .map(([type]) => TRANSPORT_TYPE_LABELS[type]);
-    return enabledLabels.length > 0 ? enabledLabels.join(", ") : "any";
 }
 
 // ============================================================================
@@ -1043,20 +1018,6 @@ function askPlatformFilter(defaultValue = "") {
     });
 }
 
-// Lets the user pick between a specific, searched-for station and the live
-// "nearest station" mode (no station-type filter — matches the default,
-// unfiltered behavior of 🔎 Find Nearest Station / the `nearest` parameter).
-function askStationMode() {
-    return presentMenu({
-        title: "Station",
-        message: "Search for a specific station, or always track the nearest one to your current location.",
-        actions: [
-            { id: "search", label: "🔎 Search by Name" },
-            { id: "nearest", label: "📍 Nearest (no filter)" }
-        ]
-    });
-}
-
 // Presents the gradient picker. With allowKeepCurrent, adds a "Continue"
 // action that keeps defaultGradient unchanged (used by the edit flow);
 // without it, there is no such shortcut (used by the create flow).
@@ -1235,14 +1196,12 @@ function stationMatchesTypeCodes(station, typeCodes) {
 }
 
 // Picks the closest station from a nearby-stations response. In SBAHN mode,
-// only S-Bahn stations are considered; in ANY mode, the Station Types default
-// from Settings is applied (or no filter at all if none are enabled there).
+// only S-Bahn stations are considered; in ANY mode there is no type filter at
+// all — every nearby station is a candidate.
 function pickNearestStation(stations, mode) {
     if (!Array.isArray(stations) || stations.length === 0) return null;
 
-    const typeCodes = mode === NEAREST_MODE.SBAHN
-        ? ["SBAHN"]
-        : getEnabledTypeCodes(DEFAULT_STATION_TYPES);
+    const typeCodes = mode === NEAREST_MODE.SBAHN ? ["SBAHN"] : [];
     const candidates = stations.filter(station => stationMatchesTypeCodes(station, typeCodes));
 
     if (candidates.length === 0) return null;
@@ -1690,20 +1649,7 @@ async function findNearestStation() {
         return null;
     }
 
-    // Restrict to whatever Station Types filter is configured in Settings
-    // (empty/all-disabled means no filter — search any nearby station).
-    const activeTypeCodes = getEnabledTypeCodes(DEFAULT_STATION_TYPES);
-    const typeLabel = getStationTypesSummaryLabel(DEFAULT_STATION_TYPES);
-
-    if (activeTypeCodes.length > 0) {
-        stations = stations.filter(station => stationMatchesTypeCodes(station, activeTypeCodes));
-        if (stations.length === 0) {
-            await showMessage(`No ${typeLabel} nearby`, `No ${typeLabel} stations were found near your current location.`);
-            return null;
-        }
-    }
-
-    console.log(`[INFO] Found ${stations.length} nearby ${activeTypeCodes.length > 0 ? typeLabel + " " : ""}stations`);
+    console.log(`[INFO] Found ${stations.length} nearby stations`);
 
     // API returns stations already sorted by distance with distanceInMeters
     const nearestStations = stations.slice(0, 10);
@@ -1714,8 +1660,8 @@ async function findNearestStation() {
     if (cacheCandidate) saveNearestCache(mode, cacheCandidate);
 
     const selectedIndex = await presentMenu({
-        title: activeTypeCodes.length > 0 ? `Select Nearest ${typeLabel}` : "Select Nearest Station",
-        message: `Found ${nearestStations.length} ${activeTypeCodes.length > 0 ? typeLabel + " " : ""}stations nearby:`,
+        title: "Select Nearest Station",
+        message: `Found ${nearestStations.length} stations nearby:`,
         actions: nearestStations.map((station, index) => ({
             id: index,
             label: `${station.name} (${formatDistance(station.distanceInMeters)})`
@@ -1769,24 +1715,21 @@ async function persistPreset({ station, lines, platform, gradient, suggestedName
     return profileName;
 }
 
+// Creates a preset for a specific, searched-for station. The live-location
+// "nearest" / "nearest-sbahn" modes are no longer created through this
+// wizard — they ship as the built-in "Nearest" / "Nearest S-Bahn" presets
+// (see ensureDefaultPresets) so they're discoverable in View/Edit Preset
+// without needing to know the widget-parameter syntax.
 async function createSavedStation() {
-    const stationMode = await askStationMode();
-    if (stationMode === null) return null;
+    const stationInput = await askText({
+        title: "Station",
+        message: "Type the station name to search.",
+        placeholder: "Marienplatz"
+    });
+    if (stationInput === null) return null;
 
-    const useNearest = stationMode === "nearest";
-    let station = null;
-
-    if (!useNearest) {
-        const stationInput = await askText({
-            title: "Station",
-            message: "Type the station name to search.",
-            placeholder: "Marienplatz"
-        });
-        if (stationInput === null) return null;
-
-        station = await searchAndSelectStation(stationInput);
-        if (station === null) return null;
-    }
+    const station = await searchAndSelectStation(stationInput);
+    if (station === null) return null;
 
     const lines = await askLinesFilter(DEFAULT_STATION_LINES);
     if (lines === null) return null;
@@ -1797,21 +1740,19 @@ async function createSavedStation() {
     const gradient = await askGradient("black", { suggestions: getLineGradientSuggestions(lines) });
     if (gradient === null) return null;
 
-    const nearestMode = useNearest ? NEAREST_MODE.ANY : null;
     const profileName = await persistPreset({
         station,
         lines,
         platform,
         gradient,
-        nearestMode,
-        suggestedName: useNearest ? "Nearest" : station
+        suggestedName: station
     });
     if (profileName === null) return null;
 
     // Show widget preview directly, reusing the same parse/apply pipeline
-    // used for widget parameters so live-location resolution kicks in.
+    // used for widget parameters.
     applyParsedWidgetParameters(parseWidgetParameters(
-        buildPresetParameterString({ station, lines, platform, gradient, nearestMode })
+        buildPresetParameterString({ station, lines, platform, gradient })
     ));
 
     await previewWidget("large");
@@ -1855,7 +1796,7 @@ async function editSavedStation() {
 
     // Parameter picker loop — user selects which field to edit
     while (true) {
-        const stationLabel = presetNearestMode ? "📍 Nearest (no filter)" : (station || "—");
+        const stationLabel = getNearestModeStationLabel(presetNearestMode) || station || "—";
         const fieldChoice = await presentMenu({
             title: `Edit: ${profileName}`,
             message: "Select a parameter to edit:",
@@ -1873,33 +1814,29 @@ async function editSavedStation() {
         if (fieldChoice === null) return null;
 
         if (fieldChoice === "station") {
-            const stationMode = await askStationMode();
-            if (stationMode === null) continue; // Picker cancelled — stay in the menu.
-
-            if (stationMode === "nearest") {
-                presetNearestMode = NEAREST_MODE.ANY;
-                station = null;
+            // Editing the station always means searching for a specific one —
+            // live-location mode (if the preset had it) is left behind. The
+            // "Nearest" / "Nearest S-Bahn" built-in presets are the supported
+            // way to get live-location behavior; see ensureDefaultPresets.
+            // If the preset was previously in live-location mode there's no
+            // concrete station to compare against, so force a real search
+            // instead of silently accepting the "Marienplatz" placeholder.
+            const previousStation = presetNearestMode ? null : station;
+            const stationInput = await askText({
+                title: "Station",
+                message: "Type the station name to search.",
+                placeholder: previousStation || "Marienplatz",
+                defaultValue: previousStation || ""
+            });
+            if (stationInput === null) return null;
+            if (stationInput === previousStation) {
+                station = previousStation;
             } else {
-                // If the preset was previously in live-location mode there's no
-                // concrete station to compare against, so force a real search
-                // instead of silently accepting the "Marienplatz" placeholder.
-                const previousStation = presetNearestMode ? null : station;
-                const stationInput = await askText({
-                    title: "Station",
-                    message: "Type the station name to search.",
-                    placeholder: previousStation || "Marienplatz",
-                    defaultValue: previousStation || ""
-                });
-                if (stationInput === null) return null;
-                if (stationInput === previousStation) {
-                    station = previousStation;
-                } else {
-                    const newStation = await searchAndSelectStation(stationInput);
-                    if (newStation === null) return null;
-                    station = newStation;
-                }
-                presetNearestMode = null;
+                const newStation = await searchAndSelectStation(stationInput);
+                if (newStation === null) return null;
+                station = newStation;
             }
+            presetNearestMode = null;
         } else if (fieldChoice === "lines") {
             const newLines = await askLinesFilter(lines);
             if (newLines === null) return null;
@@ -1983,6 +1920,14 @@ function getAppDirectory() {
     return fileManager.joinPath(fileManager.documentsDirectory(), PROFILE_DIRECTORY_NAME);
 }
 
+// Human-readable label for a preset's Station field when it's in
+// live-location mode, or null when it's a regular, searched-for station.
+function getNearestModeStationLabel(nearestMode) {
+    if (nearestMode === NEAREST_MODE.SBAHN) return "📍 Nearest S-Bahn";
+    if (nearestMode === NEAREST_MODE.ANY) return "📍 Nearest (no filter)";
+    return null;
+}
+
 // Serializes a preset into the "key: value; ..." widget parameter string.
 // When `nearestMode` is set, the station is omitted entirely and the bare
 // live-location token (e.g. `nearest`) is used instead — the same format
@@ -2046,11 +1991,11 @@ function loadSettings() {
     if (!fileManager.fileExists(settingsPath)) return;
     try {
         const saved = JSON.parse(fileManager.readString(settingsPath));
-        if (saved.defaultStationTypes) Object.assign(DEFAULT_STATION_TYPES, saved.defaultStationTypes);
         if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
         if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
         if (typeof saved.defaultStationLines === "string") DEFAULT_STATION_LINES = saved.defaultStationLines;
         if (typeof saved.defaultStationPlatform === "string") DEFAULT_STATION_PLATFORM = saved.defaultStationPlatform;
+        if (typeof saved.defaultPresetsSeeded === "boolean") DEFAULT_PRESETS_SEEDED = saved.defaultPresetsSeeded;
     } catch (e) {
         console.log(`[WARN] Failed to load settings: ${e}`);
     }
@@ -2060,31 +2005,67 @@ function saveSettings() {
     const fileManager = FileManager.iCloud();
     const settingsPath = fileManager.joinPath(ensureAppDirectory(), SETTINGS_FILE_NAME);
     fileManager.writeString(settingsPath, JSON.stringify({
-        defaultStationTypes: { ...DEFAULT_STATION_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
         showSubtractMinutes: SHOW_SUBTRACT_MINUTES,
         defaultStationLines: DEFAULT_STATION_LINES,
-        defaultStationPlatform: DEFAULT_STATION_PLATFORM
+        defaultStationPlatform: DEFAULT_STATION_PLATFORM,
+        defaultPresetsSeeded: DEFAULT_PRESETS_SEEDED
     }, null, 2));
+}
+
+// The built-in presets that make the live-location "nearest" / "nearest-sbahn"
+// modes discoverable without knowing the widget-parameter syntax or going
+// through a dedicated wizard step (previously "📍 Nearest (no filter)" in
+// Create/Edit Preset, which was confusing since it silently re-applied the
+// old Station Types Settings default instead of truly showing "no filter").
+// "Nearest S-Bahn" doubles as the one sensible ready-made "filtered nearest"
+// preset — S-Bahn is the flagship commute type — while still being freely
+// editable (lines, platform, gradient, name) like any other preset.
+const DEFAULT_PRESET_DEFINITIONS = Object.freeze([
+    { name: "Nearest", nearestMode: NEAREST_MODE.ANY, gradient: "black" },
+    { name: "Nearest S-Bahn", nearestMode: NEAREST_MODE.SBAHN, gradient: "black" }
+]);
+
+// Creates the built-in presets above the first time the app runs, so they
+// show up in View/Edit Preset immediately without any user action. Runs at
+// most once ever (guarded by the persisted defaultPresetsSeeded flag) so
+// deleting one of them via ✏️ Edit Preset → 🗑️ Delete Preset doesn't bring
+// it back on the next launch.
+function ensureDefaultPresets() {
+    if (DEFAULT_PRESETS_SEEDED) return;
+    DEFAULT_PRESETS_SEEDED = true;
+
+    const fileManager = FileManager.iCloud();
+    const profileDirectory = ensureAppDirectory();
+
+    for (const preset of DEFAULT_PRESET_DEFINITIONS) {
+        const profilePath = fileManager.joinPath(profileDirectory, `${preset.name}.txt`);
+        if (fileManager.fileExists(profilePath)) continue;
+
+        fileManager.writeString(profilePath, buildPresetParameterString({
+            nearestMode: preset.nearestMode,
+            gradient: preset.gradient
+        }));
+        console.log(`[INFO] Created default preset '${preset.name}'.`);
+    }
+
+    saveSettings();
 }
 
 async function showSettingsStationDefaults() {
     while (true) {
         const action = await presentMenu({
             title: "Station Defaults",
-            message: "Pre-filled filters when using Find Nearest Station.",
+            message: "Pre-filled filters when using Find Nearest Station or Create Preset.",
             actions: [
-                { id: "stationTypes", label: `🚉 Station Types: ${getStationTypesSummaryLabel(DEFAULT_STATION_TYPES)}` },
-                { id: "lines",        label: `🚆 Lines: ${DEFAULT_STATION_LINES || "all"}` },
-                { id: "platform",     label: `🛤 Platform: ${DEFAULT_STATION_PLATFORM || "all"}` },
-                { id: "back",         label: "← Back" },
+                { id: "lines",    label: `🚆 Lines: ${DEFAULT_STATION_LINES || "all"}` },
+                { id: "platform", label: `🛤 Platform: ${DEFAULT_STATION_PLATFORM || "all"}` },
+                { id: "back",     label: "← Back" },
             ]
         });
         if (action === null || action === "back") return;
 
-        if (action === "stationTypes") {
-            await showSettingsStationTypes();
-        } else if (action === "lines") {
+        if (action === "lines") {
             const input = await askText({
                 title: "Default Lines",
                 message: "Lines to pre-fill when using Find Nearest Station (comma-separated).\nLeave empty for no default.",
@@ -2107,32 +2088,6 @@ async function showSettingsStationDefaults() {
             DEFAULT_STATION_PLATFORM = input;
             saveSettings();
         }
-    }
-}
-
-// Restricts which station types "Find Nearest Station" searches for. Leaving
-// everything unchecked means no filter — search any nearby station.
-async function showSettingsStationTypes() {
-    while (true) {
-        const typeEmoji = {
-            sbahn: "🚇", ubahn: "🚇", bus: "🚌",
-            regionalBus: "🚌", tram: "🚊", train: "🚂"
-        };
-        const actions = Object.keys(TRANSPORT_TYPE_LABELS).map(key => ({
-            id: key,
-            label: `${typeEmoji[key]} ${TRANSPORT_TYPE_LABELS[key]}: ${DEFAULT_STATION_TYPES[key] ? "✅" : "❌"}`
-        }));
-        actions.push({ id: "back", label: "← Back" });
-
-        const action = await presentMenu({
-            title: "Station Types",
-            message: "Restrict Find Nearest Station to these types.\nLeave all unchecked to search any station.",
-            actions
-        });
-        if (action === null || action === "back") return;
-
-        DEFAULT_STATION_TYPES[action] = !DEFAULT_STATION_TYPES[action];
-        saveSettings();
     }
 }
 
@@ -2237,6 +2192,7 @@ async function main() {
     const launchedFromWidgetTap = !config.runsInWidget && (config.runsFromHomeScreen || args.widgetParameter);
 
     if (!config.runsInWidget && !launchedFromWidgetTap) {
+        ensureDefaultPresets();
         const menuChoice = await showMainMenu();
         const menuAction = getMainMenuActionForIndex(menuChoice);
         const handler = MAIN_MENU_HANDLERS[menuAction];
