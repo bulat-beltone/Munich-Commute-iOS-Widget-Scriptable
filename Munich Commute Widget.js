@@ -416,6 +416,15 @@ let nearestMode = null;
 // globalId, so the widget can skip the name-based station lookup.
 let resolvedGlobalId = null;
 
+// Tracks whether the Settings line/platform defaults have already been
+// applied for the current parameter context. createWidget() runs more than
+// once per script execution in the interactive "nearest" widget flow (once
+// per Show / Show without filters / filter edit), and without this guard it
+// would treat every explicit "no filter" choice the same as "not yet
+// decided" and silently reapply the defaults each time. See
+// applyParsedWidgetParameters(), which resets this for a fresh context.
+let nearestDefaultsApplied = false;
+
 function resolveWidgetParameter(rawParameter) {
     const trimmedParameter = (rawParameter || "").trim();
     if (!trimmedParameter) return DEFAULT_WIDGET_PARAMETERS;
@@ -551,6 +560,9 @@ function applyParsedWidgetParameters(parsed) {
     // Any previously resolved globalId belonged to a different parameter set
     // (e.g. a prior preset in an edit/preview loop) and must not leak here.
     resolvedGlobalId = null;
+    // Fresh parameter context — the Settings defaults haven't been
+    // considered for it yet.
+    nearestDefaultsApplied = false;
 }
 
 applyParsedWidgetParameters(parseWidgetParameters(paramString));
@@ -1385,6 +1397,27 @@ function createMessageWidget(title, symbolName = "exclamationmark.triangle") {
     return widget;
 }
 
+// Applies the Find Nearest defaults from Settings unless the widget
+// parameter already specified an explicit line/platform filter. Only does
+// this once per parameter context (see nearestDefaultsApplied, reset in
+// applyParsedWidgetParameters) — otherwise every later widget rebuild in the
+// interactive filter menu (e.g. "Show without filters", or manually clearing
+// a filter to empty) would have the defaults silently reapplied on top of
+// the user's explicit choice, since a cleared filter also parses to null.
+function applyNearestDefaultsIfNeeded() {
+    if (!nearestMode || nearestDefaultsApplied) return;
+    nearestDefaultsApplied = true;
+
+    if (userLines === null && DEFAULT_STATION_LINES) {
+        userLines = parseLineFilter(DEFAULT_STATION_LINES);
+        console.log(`[INFO]   - Applying default line filter: ${DEFAULT_STATION_LINES}`);
+    }
+    if (userPlatforms === null && DEFAULT_STATION_PLATFORM) {
+        userPlatforms = parsePlatformFilter(DEFAULT_STATION_PLATFORM);
+        console.log(`[INFO]   - Applying default platform filter: ${DEFAULT_STATION_PLATFORM}`);
+    }
+}
+
 async function createWidget() {
     if (missingPresetName) {
         console.log(`[ERROR]   - Preset not found for widget parameter: '${missingPresetName}'`);
@@ -1400,18 +1433,7 @@ async function createWidget() {
     const widgetConfig = getWidgetConfig(widgetSize);
     console.log(`[INFO]   - Device: ${Device.model()}`);
 
-    if (nearestMode) {
-        // Apply the Find Nearest defaults from Settings unless the widget
-        // parameter already specified an explicit line/platform filter.
-        if (userLines === null && DEFAULT_STATION_LINES) {
-            userLines = parseLineFilter(DEFAULT_STATION_LINES);
-            console.log(`[INFO]   - Applying default line filter: ${DEFAULT_STATION_LINES}`);
-        }
-        if (userPlatforms === null && DEFAULT_STATION_PLATFORM) {
-            userPlatforms = parsePlatformFilter(DEFAULT_STATION_PLATFORM);
-            console.log(`[INFO]   - Applying default platform filter: ${DEFAULT_STATION_PLATFORM}`);
-        }
-    }
+    applyNearestDefaultsIfNeeded();
 
     let departures = [];
 

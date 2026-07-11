@@ -191,6 +191,28 @@ globalThis.__testExports = {
     return { exports: context.__testExports, presentedAlerts };
 }
 
+// Exercises the "apply Settings line/platform defaults for a nearest-mode
+// widget" logic (applyNearestDefaultsIfNeeded, called from createWidget())
+// directly, without building a full ListWidget UI. `scenario` is a raw JS
+// snippet with access to all of the widget script's module-level state
+// (nearestMode, userLines, DEFAULT_STATION_LINES, ...); it must assign
+// whatever it wants returned to a `results` variable.
+function runNearestDefaultsScenario(scenario) {
+    const source = fs.readFileSync(scriptPath, "utf8")
+        .replace(/\nawait main\(\);\nScript\.complete\(\);\s*$/, "");
+
+    const context = vm.createContext(createScriptableMocks());
+    vm.runInContext(`${source}
+let results;
+${scenario}
+globalThis.__testExports = { results };`, context, { filename: scriptPath });
+
+    // Round-trip through JSON: arrays/objects built inside the vm context
+    // belong to a different realm, so Node's strict-equal assertions would
+    // otherwise reject them even when their contents match exactly.
+    return JSON.parse(JSON.stringify(context.__testExports.results));
+}
+
 test("main menu maps the visible View action to the view action id", () => {
     const { MAIN_MENU_ACTIONS, MAIN_MENU_ACTION, getMainMenuActionForIndex } = loadWidgetExports();
 
@@ -708,4 +730,80 @@ test("askGradient with allowKeepCurrent falls back to the current gradient via C
     const gradient = await exportsWithContinue.askGradient("blue", { allowKeepCurrent: true, suggestions });
 
     assert.equal(gradient, "blue");
+});
+
+test("nearest-mode Settings defaults are applied once, and are not silently reapplied after being explicitly cleared", () => {
+    // Regression test for: tapping a "nearest-sbahn" widget, closing the
+    // preview, then choosing "Show without filters" (or manually clearing
+    // the Line/Platform fields) kept showing the Settings default filter
+    // instead of actually clearing it.
+    const results = runNearestDefaultsScenario(`
+        DEFAULT_STATION_LINES = "S3, S4";
+        DEFAULT_STATION_PLATFORM = "1";
+        nearestMode = NEAREST_MODE.SBAHN;
+        userLines = null;
+        userPlatforms = null;
+
+        results = [];
+        const snapshot = () => results.push({ lines: userLines, platforms: userPlatforms });
+
+        // First widget build for the live-location widget tap: no explicit
+        // filter was given yet, so the Settings defaults should be applied.
+        applyNearestDefaultsIfNeeded();
+        snapshot();
+
+        // User taps "Show without filters" (or clears the fields manually);
+        // presentNearestPreview() sets both back to null to mean "no filter".
+        userLines = null;
+        userPlatforms = null;
+
+        // Rebuilding the widget for that request (createWidget() runs again)
+        // must NOT silently reapply the Settings defaults on top of the
+        // user's explicit "no filter" choice.
+        applyNearestDefaultsIfNeeded();
+        snapshot();
+    `);
+
+    assert.deepEqual(results[0], { lines: ["S3", "S4"], platforms: ["1"] });
+    assert.deepEqual(results[1], { lines: null, platforms: null });
+});
+
+test("applyParsedWidgetParameters resets the nearest-defaults guard for a fresh parameter context", () => {
+    const results = runNearestDefaultsScenario(`
+        DEFAULT_STATION_LINES = "S3, S4";
+        DEFAULT_STATION_PLATFORM = "";
+
+        results = [];
+        const snapshot = () => results.push({ lines: userLines });
+
+        applyParsedWidgetParameters(parseWidgetParameters("nearest-sbahn"));
+        applyNearestDefaultsIfNeeded();
+        snapshot(); // first context: no explicit filter, so defaults applied
+
+        // A second, distinct nearest-mode context within the same script run
+        // (e.g. via View/Edit Preset) with its own explicit line filter.
+        applyParsedWidgetParameters(parseWidgetParameters("nearest-sbahn; lines: U3"));
+        snapshot(); // explicit filter from the new preset, untouched so far
+        applyNearestDefaultsIfNeeded();
+        snapshot(); // still U3 — an explicit filter must not be overridden by defaults
+    `);
+
+    assert.deepEqual(results[0], { lines: ["S3", "S4"] });
+    assert.deepEqual(results[1], { lines: ["U3"] });
+    assert.deepEqual(results[2], { lines: ["U3"] });
+});
+
+test("nearest-mode Settings defaults are not applied at all when there is no line/platform default configured", () => {
+    const results = runNearestDefaultsScenario(`
+        DEFAULT_STATION_LINES = "";
+        DEFAULT_STATION_PLATFORM = "";
+        nearestMode = NEAREST_MODE.ANY;
+        userLines = null;
+        userPlatforms = null;
+
+        applyNearestDefaultsIfNeeded();
+        results = { lines: userLines, platforms: userPlatforms };
+    `);
+
+    assert.deepEqual(results, { lines: null, platforms: null });
 });
