@@ -1,0 +1,11 @@
+{
+  "name": "munich-commute-ios-widget",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Munich Commute iOS Widget for Scriptable, built from modular sources in src/",
+  "scripts": {
+    "build": "node build.js",
+    "verify-build": "node build.js && git diff --exit-code -- \"Munich Commute Widget.js\"",
+    "test": "node --test tests/*.test.js"
+  }
+}
