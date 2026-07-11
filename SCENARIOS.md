@@ -22,16 +22,20 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 **Scenario:** runs the widget → goes through the wizard → adds the widget to the home screen.
 
-- [ ] `➕ Create Preset`: search for a station → select exact match
+- [ ] `➕ Create Preset`: choose **🔎 Search by Name** or **📍 Nearest (no filter)**
+- [ ] Search by Name: search for a station → select exact match
 - [ ] Line filter (optional)
 - [ ] Platform filter (optional)
 - [ ] Choose colour (gradient)
+- [ ] Filtering to a single S-Bahn or U-Bahn line (e.g. `S3`, `U3`) surfaces a "Match <line>" suggested gradient built from that line's own color
+- [ ] Filtering to `U7` or `U8` surfaces no line-match suggestion (two-color badge, no single hue)
+- [ ] Filtering to any other single line (e.g. a bus/tram route number) surfaces all three surface-transport suggestions (Match Bus / Match Regional Bus / Match Tram), since this app doesn't track a color per bus/tram route
 - [ ] Preset name → name copied to clipboard
 - [ ] Widget preview shown
 - [ ] "Add to Home Screen" instructions shown
 - [ ] Widget added to home screen with the preset name as the parameter
 
-**Status:** ✅ `createSavedStation` wizard + `getPostCreateInstructions`.
+**Status:** ✅ `createSavedStation` wizard + `getPostCreateInstructions`. Line-matched gradient suggestions via `getLineGradientSuggestions` (S-Bahn, U-Bahn except U7/U8, and Bus/Regional Bus/Tram). Station step offers a live-location "Nearest (no filter)" option via `askStationMode`.
 
 ---
 
@@ -105,6 +109,22 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ---
 
+## 5c. Creating a "Nearest" Preset from the Wizard (no filter, same as the UI)
+
+**Scenario:** instead of hand-editing a preset file to add the `nearest` token, a user picks **📍 Nearest (no filter)** directly from **➕ Create Preset** (or converts an existing preset to it via **✏️ Edit Preset**), getting the exact same "no filter" behavior as `🔎 Find Nearest Station` / the `nearest` widget parameter.
+
+- [ ] `➕ Create Preset` → Station step offers **🔎 Search by Name** and **📍 Nearest (no filter)**
+- [ ] Choosing **📍 Nearest (no filter)** skips the station search entirely
+- [ ] Lines / Platform / Gradient / Name steps behave the same as for a regular station preset
+- [ ] The saved preset file contains the bare `nearest` token (e.g. `nearest; gradient: blue`), **not** `station: nearest`
+- [ ] The immediate preview after saving resolves the live nearest station via GPS, same as `🔎 Find Nearest Station`
+- [ ] `✏️ Edit Preset` shows `🚉 Station: 📍 Nearest (no filter)` for such a preset, and the Station field lets you switch back to a searched station or keep the live-location mode
+- [ ] The "no filter" behavior respects the **Station Types** default from Settings — unfiltered (any nearby station) when nothing is configured there, exactly like `🔎 Find Nearest Station`
+
+**Status:** ✅ `askStationMode`, `buildPresetParameterString`, `NEAREST_MODE_TOKEN`, wired into `createSavedStation` and `editSavedStation`.
+
+---
+
 ## 6. Checking Departures with Delays
 
 **Scenario:** the next departure is delayed; the widget should just show the actual (real-time) arrival time, not the planned/delayed split.
@@ -163,6 +183,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 - [ ] `✏️ Edit Preset`: select a preset
 - [ ] Edit individual fields (station, lines, platform, gradient, test data, name)
+- [ ] Editing the gradient reflects the current line filter — if it narrows to a single line, the matching suggestion(s) appear (marked "(current)" if that gradient is already saved)
 - [ ] Duplicate name protection
 - [ ] Preview shown after saving
 

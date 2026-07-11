@@ -13,7 +13,7 @@ Works based on Scriptable app.
 - **Platform badge** — a small rounded, translucent-white square shows which platform each departure uses; hidden only when your filter already narrows things down to a single platform
 - **Cancelled departures** remain visible with a subtle ❌ mark, dimmed line badge, time, and destination text
 - **Test data preview** — preview any widget size with fixture departures, without hitting the live API
-- **Customizable colors**
+- **Customizable colors**, including a **suggested line-matched color** when a preset filters down to a single line (e.g. filtering to just `S3` suggests a gradient built from S3's own color; the same works for most U-Bahn lines, and for Bus/Regional Bus/Tram)
 
 Color options:
 - grey
@@ -22,6 +22,9 @@ Color options:
 - green
 - purple
 - teal
+- one line-matched gradient per S-Bahn line (`s1`–`s7`, `s8`, `s20`) — suggested automatically, or selectable manually
+- one line-matched gradient per U-Bahn line, except U7/U8 (`u1`–`u6`) — U7 and U8 render as a two-color badge with no single hue to match, so they're intentionally skipped
+- one line-matched gradient per surface mode (`bus`, `regionalbus`, `tram`) — Bus, Regional Bus, and Tram routes all share one flat brand color per mode rather than a color per route number, so filtering to an unrecognized single line suggests all three as candidates
 
 ## Installation
 
@@ -51,7 +54,9 @@ When you open `Munich Commute Widget.js` in Scriptable, you'll see a menu with t
 #### ➕ Create Preset
 A wizard to create a reusable station configuration:
 
-1. **Station** — Search and select from MVG stations
+1. **Station** — Either:
+   - **🔎 Search by Name** — search and select from MVG stations, or
+   - **📍 Nearest (no filter)** — always track the closest station to your current location when the widget refreshes, exactly like the `nearest` live-location parameter (see [📍 Nearest station widget (live location)](#-nearest-station-widget-live-location) below) — no station-type filter is applied beyond your **Station Types** default in Settings, if configured
 2. **Lines** (optional) — Filter by specific lines (e.g., S1, S2, U3)
 3. **Platform** (optional) — Filter by platform number
 4. **Color** — Choose a background gradient
@@ -65,7 +70,7 @@ After saving:
 #### ✏️ Edit Preset
 Select an existing preset to change any of its fields, or delete it:
 
-- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset
+- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset, including the choice between **🔎 Search by Name** and **📍 Nearest (no filter)**
 - **Test data** (optional) — point at a JSON file in `Munich Commute/TestData/` to preview the widget with fixed fixture departures instead of live API data (see [Test data preview](#-test-data-preview) below)
 - **🗑️ Delete Preset** — a destructive action in the same menu; confirms before permanently removing the preset file
 
@@ -105,6 +110,7 @@ How it works:
 - Run **🔎 Find Nearest Station** from the app once to grant location permission and seed that cache.
 - The **Station Defaults** (Station Types / Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. only search S-Bahn stops and only show `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override the line/platform default.
 - You can combine the token with a gradient in a preset file, e.g. `nearest-sbahn; gradient: blue`.
+- The `nearest` (no filter) variant can be created directly from **➕ Create Preset** / **✏️ Edit Preset** by choosing **📍 Nearest (no filter)** instead of searching for a station name — no manual file editing needed.
 
 #### ⚙️ Settings
 Accessible from the main menu. Changes save immediately — no Save button needed.
@@ -190,6 +196,33 @@ Choose from available gradients:
 - `green`
 - `purple`
 - `teal`
+
+Or match a single line's own color, e.g. `gradient: s3`. These are generated from each line's badge color using the same lightness/saturation recipe as the gradients above, so they fit the same visual style. When a preset's line filter narrows down to exactly one line, the color picker suggests the matching option(s) automatically — but you can also set it manually, or combine it with a different line filter.
+
+| Line | Gradient key |
+|------|--------------|
+| S1 | `s1` |
+| S2 | `s2` |
+| S3 | `s3` |
+| S4 | `s4` |
+| S5 | `s5` |
+| S6 | `s6` |
+| S7 | `s7` |
+| S8 | `s8` |
+| S20 | `s20` |
+| U1 | `u1` |
+| U2 | `u2` |
+| U3 | `u3` |
+| U4 | `u4` |
+| U5 | `u5` |
+| U6 | `u6` |
+| Bus | `bus` |
+| Regional Bus | `regionalbus` |
+| Tram | `tram` |
+
+**U7 and U8** are the only rail lines without a line-matched gradient: their badges already blend two colors (green→red for U7, red→orange for U8), so there's no single hue to derive a gradient from.
+
+**Bus, Regional Bus, and Tram** each use one flat brand color across every route number (this app doesn't track colors per individual bus/tram route), so filtering down to a single line that isn't a recognized S-Bahn/U-Bahn label suggests all three surface-transport gradients as candidates — pick whichever actually matches the line you filtered to.
 
 #### Presets
 You can provide a **preset name** as the widget parameter (without `:`). The script will then load the preset.
