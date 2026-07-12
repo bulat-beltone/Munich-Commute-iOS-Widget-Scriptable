@@ -52,6 +52,50 @@ function getEnabledTypeCodes(typesConfig) {
         .map(([type]) => TRANSPORT_TYPE_API_CODES[type]);
 }
 
+// Reverse of TRANSPORT_TYPE_API_CODES (e.g. "SBAHN" -> "sbahn"), used to turn
+// a preset's persisted API-code type filter back into a toggle-able config.
+const TRANSPORT_TYPE_KEYS_BY_CODE = Object.fromEntries(
+    Object.entries(TRANSPORT_TYPE_API_CODES).map(([type, code]) => [code, type])
+);
+
+// Human labels/emoji for the per-preset "nearest" Type filter editor (see
+// askNearestTypesFilter). Mirrors the removed Settings-level Station Types
+// toggle, but scoped to an individual live-location preset instead of a
+// single global default.
+const TRANSPORT_TYPE_LABELS = {
+    sbahn: "S-Bahn",
+    ubahn: "U-Bahn",
+    bus: "Bus",
+    regionalBus: "Regional Bus",
+    tram: "Tram",
+    train: "Train"
+};
+const TRANSPORT_TYPE_EMOJI = {
+    sbahn: "🚇", ubahn: "🚇", bus: "🚌",
+    regionalBus: "🚌", tram: "🚊", train: "🚂"
+};
+
+// Converts a preset's persisted array of API type codes (e.g. ["SBAHN"])
+// into a TRANSPORT_TYPES-shaped config object for the toggle-list editor.
+function codesToTypesConfig(codes) {
+    const config = { sbahn: false, ubahn: false, bus: false, regionalBus: false, tram: false, train: false };
+    (codes || []).forEach(code => {
+        const key = TRANSPORT_TYPE_KEYS_BY_CODE[code];
+        if (key) config[key] = true;
+    });
+    return config;
+}
+
+// Human-readable summary for a "nearest" preset's Type filter, e.g.
+// "S-Bahn, Tram", or "any" when no filter is set.
+function getNearestTypesSummaryLabel(typeCodes) {
+    if (!Array.isArray(typeCodes) || typeCodes.length === 0) return "any";
+    const labels = typeCodes
+        .map(code => TRANSPORT_TYPE_LABELS[TRANSPORT_TYPE_KEYS_BY_CODE[code]])
+        .filter(Boolean);
+    return labels.length > 0 ? labels.join(", ") : "any";
+}
+
 // ============================================================================
 // ADVANCED CONFIGURATION
 // ============================================================================
@@ -387,6 +431,12 @@ let missingPresetName = null;
 // from the current location instead of a fixed station name.
 let nearestMode = null;
 
+// Optional array of MVG API type codes (e.g. ["SBAHN", "TRAM"]) restricting
+// which nearby stations count as candidates in NEAREST_MODE.ANY. Set per
+// preset via ✏️ Edit Preset → 🌐 Type (see askNearestTypesFilter). Not used
+// in NEAREST_MODE.SBAHN, which always hardcodes S-Bahn-only regardless.
+let nearestTypeCodes = null;
+
 // When the nearest station is resolved from GPS/nearby data we already have its
 // globalId, so the widget can skip the name-based station lookup.
 let resolvedGlobalId = null;
@@ -469,6 +519,7 @@ function parseWidgetParameters(rawParamString) {
         testDataFile: null,
         previewWidgetSize: null,
         nearestMode: null,
+        nearestTypes: null,
         hasExplicitStation: false
     };
 
@@ -513,6 +564,12 @@ function parseWidgetParameters(rawParamString) {
             case "test":
                 parsed.testDataFile = value;
                 break;
+            case "types":
+            case "type":
+                parsed.nearestTypes = value
+                    ? value.split(",").map(v => v.trim().toUpperCase()).filter(Boolean)
+                    : null;
+                break;
             case "size":
             case "widget":
             case "widgetsize":
@@ -532,6 +589,7 @@ function applyParsedWidgetParameters(parsed) {
     userTestDataFile = parsed.testDataFile;
     userPreviewWidgetSize = parsed.previewWidgetSize;
     nearestMode = parsed.nearestMode;
+    nearestTypeCodes = parsed.nearestTypes;
     // Any previously resolved globalId belonged to a different parameter set
     // (e.g. a prior preset in an edit/preview loop) and must not leak here.
     resolvedGlobalId = null;
@@ -1035,6 +1093,33 @@ function askStationMode() {
     });
 }
 
+// Lets the user restrict a live-location "Nearest" preset (NEAREST_MODE.ANY
+// only) to specific station types — e.g. keep S-Bahn only, or U-Bahn + Tram.
+// Leaving everything unchecked means no filter, same as the plain "Nearest"
+// built-in preset. Only offered for NEAREST_MODE.ANY presets in Edit Preset;
+// "Nearest S-Bahn" (NEAREST_MODE.SBAHN) always hardcodes S-Bahn-only and
+// intentionally doesn't get this editor. Returns the updated array of API
+// type codes (e.g. ["SBAHN", "TRAM"]), or [] for "no filter".
+async function askNearestTypesFilter(currentTypeCodes) {
+    const config = codesToTypesConfig(currentTypeCodes);
+    while (true) {
+        const actions = Object.keys(TRANSPORT_TYPE_LABELS).map(key => ({
+            id: key,
+            label: `${TRANSPORT_TYPE_EMOJI[key]} ${TRANSPORT_TYPE_LABELS[key]}: ${config[key] ? "✅" : "❌"}`
+        }));
+        actions.push({ id: "back", label: "← Back" });
+
+        const action = await presentMenu({
+            title: "Filter by Type",
+            message: "Restrict this preset's nearest-station search to these types.\nLeave all unchecked to search any nearby station.",
+            actions
+        });
+        if (action === null || action === "back") return getEnabledTypeCodes(config);
+
+        config[action] = !config[action];
+    }
+}
+
 // Presents the gradient picker. With allowKeepCurrent, adds a "Continue"
 // action that keeps defaultGradient unchanged (used by the edit flow);
 // without it, there is no such shortcut (used by the create flow).
@@ -1213,12 +1298,16 @@ function stationMatchesTypeCodes(station, typeCodes) {
 }
 
 // Picks the closest station from a nearby-stations response. In SBAHN mode,
-// only S-Bahn stations are considered; in ANY mode there is no type filter at
-// all — every nearby station is a candidate.
-function pickNearestStation(stations, mode) {
+// only S-Bahn stations are considered (explicitTypeCodes is ignored — this
+// mode is intentionally left as-is). In ANY mode, explicitTypeCodes (from a
+// preset's per-preset Type filter, if any) restricts the candidates; with no
+// filter, every nearby station is a candidate.
+function pickNearestStation(stations, mode, explicitTypeCodes) {
     if (!Array.isArray(stations) || stations.length === 0) return null;
 
-    const typeCodes = mode === NEAREST_MODE.SBAHN ? ["SBAHN"] : [];
+    const typeCodes = mode === NEAREST_MODE.SBAHN
+        ? ["SBAHN"]
+        : (Array.isArray(explicitTypeCodes) ? explicitTypeCodes : []);
     const candidates = stations.filter(station => stationMatchesTypeCodes(station, typeCodes));
 
     if (candidates.length === 0) return null;
@@ -1261,6 +1350,17 @@ async function fetchNearbyStations(latitude, longitude) {
     }
 }
 
+// Cache key for a resolved nearest station. SBAHN mode's key is left exactly
+// as "sbahn" (untouched), and ANY mode without an explicit Type filter keeps
+// the original "any" key for backward compatibility with existing
+// NearestCache.json entries. Only an ANY-mode preset with its own Type
+// filter gets a distinct cache slot, so two differently-filtered "Nearest"
+// presets never clobber each other's GPS-unavailable fallback station.
+function getNearestCacheKey(mode, typeCodes) {
+    if (mode !== NEAREST_MODE.ANY || !Array.isArray(typeCodes) || typeCodes.length === 0) return mode;
+    return `${mode}:${[...typeCodes].sort().join(",")}`;
+}
+
 function saveNearestCache(mode, station) {
     try {
         const fileManager = FileManager.iCloud();
@@ -1300,26 +1400,29 @@ function loadNearestCache(mode) {
     return null;
 }
 
-// Resolves the nearest station for the given mode. Tries a live GPS fix first
-// and caches the result; if the fix or network call fails (common during
-// background widget refresh), it falls back to the most recent cached station.
-async function resolveNearestStation(mode) {
+// Resolves the nearest station for the given mode, optionally restricted by
+// an explicit Type filter (ANY mode only — see pickNearestStation). Tries a
+// live GPS fix first and caches the result; if the fix or network call fails
+// (common during background widget refresh), it falls back to the most
+// recent cached station for this mode/filter combination.
+async function resolveNearestStation(mode, typeCodes = null) {
+    const cacheKey = getNearestCacheKey(mode, typeCodes);
     const location = await getCurrentLocationSafe();
     if (location) {
         console.log(`[INFO] Current location: ${location.latitude}, ${location.longitude}`);
         const stations = await fetchNearbyStations(location.latitude, location.longitude);
-        const nearest = pickNearestStation(stations, mode);
+        const nearest = pickNearestStation(stations, mode, typeCodes);
         if (nearest) {
-            console.log(`[INFO] Nearest ${mode} station: ${nearest.name} (${nearest.distanceInMeters}m)`);
-            saveNearestCache(mode, nearest);
+            console.log(`[INFO] Nearest '${cacheKey}' station: ${nearest.name} (${nearest.distanceInMeters}m)`);
+            saveNearestCache(cacheKey, nearest);
             return nearest;
         }
-        console.log(`[WARN] No matching station found nearby for mode '${mode}'.`);
+        console.log(`[WARN] No matching station found nearby for '${cacheKey}'.`);
     }
 
-    const cached = loadNearestCache(mode);
+    const cached = loadNearestCache(cacheKey);
     if (cached) {
-        console.log(`[INFO] Falling back to cached nearest ${mode} station: ${cached.name}`);
+        console.log(`[INFO] Falling back to cached nearest '${cacheKey}' station: ${cached.name}`);
     }
     return cached;
 }
@@ -1429,10 +1532,13 @@ async function createWidget() {
         console.log(`[INFO]   - Test departures loaded: ${departures.length}`);
     } else {
         if (nearestMode) {
-            console.log(`[INFO] Step 3: Resolving nearest station (mode: ${nearestMode})...`);
-            const nearest = await resolveNearestStation(nearestMode);
+            const hasTypeFilter = nearestMode === NEAREST_MODE.ANY && Array.isArray(nearestTypeCodes) && nearestTypeCodes.length > 0;
+            console.log(`[INFO] Step 3: Resolving nearest station (mode: ${nearestMode}${hasTypeFilter ? `, types: ${nearestTypeCodes.join(",")}` : ""})...`);
+            const nearest = await resolveNearestStation(nearestMode, nearestTypeCodes);
             if (!nearest) {
-                const label = nearestMode === NEAREST_MODE.SBAHN ? "S-Bahn station" : "station";
+                const label = nearestMode === NEAREST_MODE.SBAHN
+                    ? "S-Bahn station"
+                    : (hasTypeFilter ? `${getNearestTypesSummaryLabel(nearestTypeCodes)} station` : "station");
                 return createMessageWidget(
                     `No nearby ${label} — location unavailable`,
                     "location.slash"
@@ -1825,6 +1931,8 @@ async function editSavedStation() {
     const existingParams = parseWidgetParameters(content);
     let station = existingParams.station;
     let presetNearestMode = existingParams.nearestMode || null;
+    // Only meaningful for NEAREST_MODE.ANY — see askNearestTypesFilter.
+    let nearestTypes = presetNearestMode === NEAREST_MODE.ANY ? (existingParams.nearestTypes || []) : [];
     let platform = existingParams.platforms ? existingParams.platforms.join(", ") : "";
     let lines = existingParams.lines ? existingParams.lines.join(", ") : "";
     let gradient = existingParams.gradient;
@@ -1835,12 +1943,18 @@ async function editSavedStation() {
     // Parameter picker loop — user selects which field to edit
     while (true) {
         const stationLabel = getNearestModeStationLabel(presetNearestMode) || station || "—";
+        const fieldActions = [{ id: "station", label: `🚉 Station: ${stationLabel}` }];
+        // Only NEAREST_MODE.ANY presets get a Type filter — "Nearest S-Bahn"
+        // (NEAREST_MODE.SBAHN) always hardcodes S-Bahn-only and is left as-is.
+        if (presetNearestMode === NEAREST_MODE.ANY) {
+            fieldActions.push({ id: "types", label: `🌐 Type: ${getNearestTypesSummaryLabel(nearestTypes)}` });
+        }
+        fieldActions.push({ id: "lines", label: `🚆 Lines: ${lines || "all"}` });
         const fieldChoice = await presentMenu({
             title: `Edit: ${profileName}`,
             message: "Select a parameter to edit:",
             actions: [
-                { id: "station", label: `🚉 Station: ${stationLabel}` },
-                { id: "lines", label: `🚆 Lines: ${lines || "all"}` },
+                ...fieldActions,
                 { id: "platform", label: `🛤 Platform: ${platform || "all"}` },
                 { id: "gradient", label: `🎨 Gradient: ${gradient}` },
                 { id: "name", label: `📝 Name: ${profileName}` },
@@ -1885,6 +1999,9 @@ async function editSavedStation() {
                 }
             }
             presetNearestMode = null;
+            nearestTypes = [];
+        } else if (fieldChoice === "types") {
+            nearestTypes = await askNearestTypesFilter(nearestTypes);
         } else if (fieldChoice === "lines") {
             const newLines = await askLinesFilter(lines);
             if (newLines === null) return null;
@@ -1928,6 +2045,7 @@ async function editSavedStation() {
         platform,
         gradient,
         nearestMode: presetNearestMode,
+        nearestTypes,
         testDataFile
     });
 
@@ -1981,10 +2099,16 @@ function getNearestModeStationLabel(nearestMode) {
 // live-location token (e.g. `nearest`) is used instead — the same format
 // documented for widget parameters — rather than a literal `station: nearest`,
 // which `parseWidgetParameters` would treat as a (non-existent) station name.
-function buildPresetParameterString({ station, lines, platform, gradient, nearestMode, testDataFile }) {
+function buildPresetParameterString({ station, lines, platform, gradient, nearestMode, nearestTypes, testDataFile }) {
     const parts = nearestMode
         ? [NEAREST_MODE_TOKEN[nearestMode] || NEAREST_MODE_TOKEN[NEAREST_MODE.ANY]]
         : [`station: ${station}`];
+    // The Type filter only applies to NEAREST_MODE.ANY — "Nearest S-Bahn"
+    // (NEAREST_MODE.SBAHN) always hardcodes S-Bahn-only and is intentionally
+    // left untouched here.
+    if (nearestMode === NEAREST_MODE.ANY && Array.isArray(nearestTypes) && nearestTypes.length > 0) {
+        parts.push(`types: ${nearestTypes.join(",")}`);
+    }
     if (lines) parts.push(`lines: ${lines}`);
     if (platform) parts.push(`platform: ${platform}`);
     parts.push(`gradient: ${gradient || "black"}`);

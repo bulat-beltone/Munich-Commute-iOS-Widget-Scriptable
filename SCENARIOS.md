@@ -101,10 +101,10 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 **Scenario:** user sets the widget parameter to `nearest` or `nearest-sbahn` so it always tracks the closest station to their current location — either directly (via the built-in `Nearest` / `Nearest S-Bahn` presets, see 5a) or by hand-editing a preset file / widget parameter.
 
-- [ ] `nearest` resolves the closest station of **any** type — unfiltered
+- [ ] `nearest` resolves the closest station of **any** type — unfiltered by default, or restricted by an optional per-preset `types:` filter (see 5e)
 - [ ] `nearest-sbahn` resolves the closest station whose transport types include `SBAHN`
 - [ ] Live GPS fix is used when available and the result is cached
-- [ ] When iOS denies a background GPS fix, the widget falls back to the cached station instead of erroring
+- [ ] When iOS denies a background GPS fix, the widget falls back to the cached station (for that same mode/filter combination) instead of erroring
 - [ ] With neither location nor cache, a styled "location unavailable" screen is shown
 - [ ] Station Defaults (Line / Platform) from Settings are applied automatically; explicit `lines:`/`platform:` in the parameter override them
 - [ ] Header uses a 📍 location icon and the title reads "Nearest: [station]"
@@ -138,6 +138,23 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] The same nearby-station picker (and its GPS-cache-priming side effect for the `nearest` live-location token) is shared between this wizard option and `🔎 Find Nearest Station`, so behavior is identical between the two
 
 **Status:** ✅ `askStationMode`, `pickNearbyStationByLocation`, wired into `createSavedStation`, `editSavedStation`, and `findNearestStation`.
+
+---
+
+## 5e. Per-preset Type Filter for the "Nearest" (ANY-mode) Preset
+
+**Scenario:** a user editing the built-in `Nearest` preset (or any other `nearest`-mode preset) wants to restrict which nearby station types it considers — e.g. keep S-Bahn only, or U-Bahn + Tram — without hand-editing the preset file. `Nearest S-Bahn` already does exactly this (hardcoded to S-Bahn) and is intentionally left untouched; this generalizes the same idea to `Nearest` for any type combination.
+
+- [ ] `✏️ Edit Preset` on a `nearest`-mode (ANY) preset shows a `🌐 Type: <summary>` action (e.g. `any`, `S-Bahn`, `S-Bahn, Tram`)
+- [ ] This action is **not** shown for `Nearest S-Bahn` (SBAHN mode) or for a regular, fixed-station preset
+- [ ] Tapping **Type** opens a toggle list (S-Bahn, U-Bahn, Bus, Regional Bus, Tram, Train) with a ✅/❌ indicator per type and a `← Back` action; leaving everything unchecked means "any type" (no filter)
+- [ ] Saving persists the filter as `types: <CODES>` in the preset file, alongside the bare `nearest` token (e.g. `nearest; types: SBAHN,TRAM; gradient: black`)
+- [ ] Switching the preset's **Station** field away from live-location mode (to a fixed station via Search/Find Nearest) clears the Type filter, since it no longer applies
+- [ ] The live-location widget honors the filter: with it set, `nearest` only considers nearby stations matching those types; with it empty, behavior is unchanged (any nearby station)
+- [ ] The GPS-unavailable fallback cache is keyed per mode **and** filter, so two differently-filtered `nearest`-mode presets never overwrite each other's cached fallback station
+- [ ] `nearest-sbahn` is completely unaffected by this feature — its hardcoded S-Bahn-only behavior, serialization, and cache key are unchanged
+
+**Status:** ✅ `askNearestTypesFilter`, `codesToTypesConfig`, `getNearestTypesSummaryLabel`, `getNearestCacheKey`, wired into `editSavedStation`, `pickNearestStation`, `resolveNearestStation`, and `buildPresetParameterString`/`parseWidgetParameters` (`types:` parameter).
 
 ---
 
@@ -232,9 +249,9 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 
 ## 9. Settings
 
-- [ ] Transport types (S-Bahn, U-Bahn, Bus, Tram, etc.) — toggle
-- [ ] Default filters for Find Nearest
+- [ ] Station Defaults (Lines / Platform) for Find Nearest / Create Preset
 - [ ] Subtract Minutes + `-N` indicator
+- [ ] No global Transport Types toggle — per-preset type filtering for `nearest`-mode presets lives in **✏️ Edit Preset → 🌐 Type** instead (see 5e)
 
 **Status:** ✅ `showSettings`.
 
