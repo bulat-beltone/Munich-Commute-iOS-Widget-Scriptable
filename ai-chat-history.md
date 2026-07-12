@@ -20,6 +20,15 @@
 - `pickNearestStation` gained an optional third `explicitTypeCodes` argument, used only in ANY mode; SBAHN mode ignores it entirely, preserving "Nearest S-Bahn" exactly as-is. `resolveNearestStation` now also derives a cache key via new `getNearestCacheKey` (SBAHN stays `"sbahn"`, ANY stays `"any"` unless a Type filter is set, in which case it gets its own `"any:<sorted codes>"` slot) so two differently-filtered `nearest` presets never clobber each other's GPS-unavailable fallback.
 - Editing a preset's Station field away from live-location mode now also clears its Type filter, since it no longer applies to a fixed station. Updated README/SCENARIOS docs and added regression tests (parsing/serialization, filtering behavior, cache-key isolation, the toggle-editor UI, and the Edit Preset menu gating).
 
+### 2026-07-12 (unify Nearest S-Bahn into the generic Type filter)
+- User: "Actually I tried to unify logic of all nearest stations, so nearest S-Bahn is just nearest with type S-Bahn, not custom hardcoded preset" — reversing the earlier "leave Nearest S-Bahn untouched" decision now that a generic Type filter exists, since S-Bahn-only is just a special case of it.
+- Removed `NEAREST_MODE.SBAHN` — there is now a single `NEAREST_MODE.ANY` (live-location) mode. `pickNearestStation` dropped its `mode` parameter entirely and just takes an optional Type-codes array; `resolveNearestStation`/`getNearestCacheKey` followed suit. `NEAREST_MODE_TOKEN` was removed (only one token, `nearest`, is ever written now).
+- `Nearest S-Bahn` is now stored as `nearest; types: SBAHN` instead of the old dedicated `nearest-sbahn` token. `DEFAULT_PRESET_DEFINITIONS`/`ensureDefaultPresets` updated accordingly.
+- ✏️ Edit Preset's `🌐 Type` action is no longer gated to a specific mode — every live-location preset gets it, including `Nearest S-Bahn`, since it's just another Type filter now.
+- `getNearestModeStationLabel` simplified to always return `"📍 Nearest"` for a live-location Station field (dropped the old "(no filter)"/"S-Bahn" distinction) — the actual Type filter is shown in its own row.
+- Backward compatibility: `nearest-sbahn` / `nearest-s-bahn` are still accepted when *parsing* a widget parameter (via new `NEAREST_TOKEN_TYPES`, mapping them to `nearest` + an implicit `["SBAHN"]` filter), so existing widgets/presets someone already configured with the old token keep working — the app just never writes that token again. An explicit `types:` later in the same parameter string still overrides the implicit one.
+- The GPS-unavailable fallback cache key logic also simplified: unfiltered `nearest` keeps the original `"any"` key; any Type filter (S-Bahn included) gets `"any:<sorted codes>"`. Rewrote/consolidated the affected regression tests (~15 tests touched) to match the unified model.
+
 ## Cancelled train rendering
 
 ### 2026-06-30

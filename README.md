@@ -59,7 +59,9 @@ Two presets are created automatically the first time you open the app, so the li
 | `Nearest` | Closest station of any type, no line/platform filter |
 | `Nearest S-Bahn` | Closest station served by the **S-Bahn** |
 
-Like any preset, you can rename either one or change its Lines / Platform / Gradient via **✏️ Edit Preset**. If you delete one, it won't come back automatically — recreate it by hand-editing a preset file with the `nearest` / `nearest-sbahn` token if you ever need to (see the parameter table below).
+There is only one underlying live-location mode — `Nearest S-Bahn` is just that mode with its **🌐 Type** filter set to S-Bahn only, not a separate hardcoded preset. You can change either preset's Type filter the same way, e.g. edit `Nearest` to keep only U-Bahn + Tram, or edit `Nearest S-Bahn` to widen it back to any type.
+
+Like any preset, you can rename either one or change its Lines / Platform / Gradient / Type via **✏️ Edit Preset**. If you delete one, it won't come back automatically — recreate it by hand-editing a preset file with the `nearest` token (optionally with a `types:` filter) if you ever need to (see the parameter table below).
 
 #### ➕ Create Preset
 A wizard to create a reusable station configuration:
@@ -82,8 +84,8 @@ After saving:
 #### ✏️ Edit Preset
 Select an existing preset to change any of its fields, or delete it:
 
-- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset, including the choice between **🔎 Search by Name** and **📍 Find Nearest**. If the preset was one of the built-in live-location presets (or any other `nearest`/`nearest-sbahn` preset), editing Station always switches it to whichever fixed station you search for or pick from the nearby list
-- **🌐 Type** — only shown while the preset's Station is the unfiltered `Nearest` live-location mode. Restricts (or keeps only) certain transport types for that preset's nearest-station search, e.g. keep S-Bahn only, or U-Bahn + Tram — leave everything unchecked for "any type" (the default). This is *not* offered for `Nearest S-Bahn`, which already always searches S-Bahn-only and doesn't need it
+- **Station**, **Lines**, **Platform**, **Gradient**, **Name** — same as in Create Preset, including the choice between **🔎 Search by Name** and **📍 Find Nearest**. If the preset was one of the built-in live-location presets (or any other `nearest` preset), editing Station always switches it to whichever fixed station you search for or pick from the nearby list
+- **🌐 Type** — shown for any live-location (`Nearest`) preset, including `Nearest S-Bahn`. Restricts (or keeps only) certain transport types for that preset's nearest-station search, e.g. keep S-Bahn only, or U-Bahn + Tram — leave everything unchecked for "any type". `Nearest S-Bahn` is just this same filter set to S-Bahn only, so editing it here works exactly like any other `Nearest` preset — there's no separate hardcoded S-Bahn mode
 - **Test data** (optional) — point at a JSON file in `Munich Commute/TestData/` to preview the widget with fixed fixture departures instead of live API data (see [Test data preview](#-test-data-preview) below)
 - **🗑️ Delete Preset** — a destructive action in the same menu; confirms before permanently removing the preset file
 
@@ -108,30 +110,31 @@ Tapping a live-location widget (see below) on your Home Screen follows the same 
 Running either flow once also grants location permission and primes the cache used by the live-location widget parameter (see below).
 
 #### 📍 Nearest station widget (live location)
-Instead of a fixed station, you can set the widget **Parameter** to a live-location token so the widget always shows the closest station to wherever you are:
+Instead of a fixed station, you can set the widget **Parameter** to `nearest` so the widget always shows the closest station to wherever you are. There is only **one** live-location mode — restricting it to specific transport types (e.g. S-Bahn only) is just an optional `types:` filter on top of it, not a separate token:
 
 | Parameter | Behaviour |
 |-----------|-----------|
 | `nearest` | Closest station of any type |
-| `nearest-sbahn` | Closest station served by the **S-Bahn** |
+| `nearest; types: SBAHN` | Closest station served by the **S-Bahn** — exactly what the built-in `Nearest S-Bahn` preset uses |
 
 How it works:
-- On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match (`nearest` searches **any** nearby station, unfiltered, unless narrowed by a `types:` filter — see below; `nearest-sbahn` always restricts to stations whose transport types include `SBAHN`).
+- On each refresh the widget requests your current location and queries the MVG *nearby stations* endpoint, then picks the closest match. With no `types:` filter, **any** nearby station is a candidate; with one, only stations matching those types are.
 - In this mode the header shows a 📍 location icon and the title reads **Nearest: [station]** so it's clear the station is chosen automatically.
-- The resolved station is cached per mode/filter combination. iOS heavily restricts GPS access while a widget refreshes in the background, so if a live fix isn't available the widget falls back to the **last known** nearest station for that same mode/filter instead of showing an error.
+- The resolved station is cached per Type filter combination. iOS heavily restricts GPS access while a widget refreshes in the background, so if a live fix isn't available the widget falls back to the **last known** nearest station for that same filter instead of showing an error.
 - Run **🔎 Find Nearest Station** from the app once to grant location permission and seed that cache.
 - The **Station Defaults** (Line / Platform) configured in **⚙️ Settings** are automatically applied, so you can e.g. always show only `S3, S4`. Pass an explicit `lines:`/`platform:` in the parameter to override the default.
-- You can combine the token with a gradient in a preset file, e.g. `nearest-sbahn; gradient: blue`.
-- Both variants are already set up for you as built-in presets — see [📍 Built-in "Nearest" presets](#-built-in-nearest-presets) above — so there's normally no need to hand-edit a preset file for this at all.
+- You can combine the token with a gradient in a preset file, e.g. `nearest; types: SBAHN; gradient: blue`.
+- Both the unfiltered and S-Bahn-only variants are already set up for you as built-in presets — see [📍 Built-in "Nearest" presets](#-built-in-nearest-presets) above — so there's normally no need to hand-edit a preset file for this at all.
+- **Legacy:** the old `nearest-sbahn` / `nearest-s-bahn` tokens (from before this was unified) are still understood as widget parameters and behave the same as `nearest; types: SBAHN`, so any widget already configured with them keeps working. New presets are never written that way, though — see below.
 
 ##### Restricting `nearest` to specific types
-The plain `nearest` token (`NEAREST_MODE.ANY`) can optionally be narrowed with a `types:` parameter, a comma-separated list of MVG type codes (`SBAHN`, `UBAHN`, `BUS`, `REGIONAL_BUS`, `TRAM`, `BAHN`):
+The `nearest` token can optionally be narrowed with a `types:` parameter, a comma-separated list of MVG type codes (`SBAHN`, `UBAHN`, `BUS`, `REGIONAL_BUS`, `TRAM`, `BAHN`):
 
 ```
 nearest; types: SBAHN,TRAM
 ```
 
-This is exactly what **✏️ Edit Preset → 🌐 Type** writes for you when editing the built-in `Nearest` preset (or any other `nearest`-mode preset) — see above. It has no effect on `nearest-sbahn`, which always hardcodes S-Bahn-only.
+This is exactly what **✏️ Edit Preset → 🌐 Type** writes for you when editing the built-in `Nearest` preset, `Nearest S-Bahn`, or any other `nearest` preset — see above.
 
 #### ⚙️ Settings
 Accessible from the main menu. Changes save immediately — no Save button needed.
@@ -178,7 +181,7 @@ Show only specific lines (comma-separated).
 ```
 nearest; types: SBAHN,TRAM
 ```
-Only meaningful together with the `nearest` token (`NEAREST_MODE.ANY`); restricts which nearby station types are eligible, using MVG type codes (`SBAHN`, `UBAHN`, `BUS`, `REGIONAL_BUS`, `TRAM`, `BAHN`, comma-separated). Leaving it out (or empty) means no filter — any nearby station is eligible, same as before. Has no effect on `nearest-sbahn`. This is what **✏️ Edit Preset → 🌐 Type** writes for you (see [📍 Nearest station widget (live location)](#-nearest-station-widget-live-location) above) — you normally won't need to type it by hand.
+Only meaningful together with the `nearest` token; restricts which nearby station types are eligible, using MVG type codes (`SBAHN`, `UBAHN`, `BUS`, `REGIONAL_BUS`, `TRAM`, `BAHN`, comma-separated). Leaving it out (or empty) means no filter — any nearby station is eligible. This is what **✏️ Edit Preset → 🌐 Type** writes for you (see [📍 Nearest station widget (live location)](#-nearest-station-widget-live-location) above) — you normally won't need to type it by hand. `nearest-sbahn` (the pre-unification, S-Bahn-only token) is equivalent to `nearest; types: SBAHN` and still works for backward compatibility, but is never written by the app any more.
 
 #### Test data preview
 ```
