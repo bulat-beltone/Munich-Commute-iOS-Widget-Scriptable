@@ -111,7 +111,7 @@ globalThis.__testExports = {
     pickNearestStation,
     NEAREST_MODE,
     NEAREST_TOKENS,
-    NEAREST_MODE_TOKEN,
+    NEAREST_TOKEN_TYPES,
     parseWidgetParameters,
     applyParsedWidgetParameters,
     normalizeWidgetSize,
@@ -126,7 +126,13 @@ globalThis.__testExports = {
     CONFIG,
     LINE_COLORS,
     askGradient,
-    AVAILABLE_GRADIENTS
+    AVAILABLE_GRADIENTS,
+    getNearestCacheKey,
+    getNearestTypesSummaryLabel,
+    codesToTypesConfig,
+    getEnabledTypeCodes,
+    TRANSPORT_TYPE_LABELS,
+    TRANSPORT_TYPE_API_CODES
 };`, context, { filename: scriptPath });
 
     return context.__testExports;
@@ -187,7 +193,8 @@ globalThis.__testExports = {
     askGradient,
     getLineGradientSuggestions,
     CONFIG,
-    AVAILABLE_GRADIENTS
+    AVAILABLE_GRADIENTS,
+    askNearestTypesFilter
 };`, context, { filename: scriptPath });
 
     return { exports: context.__testExports, presentedAlerts };
@@ -388,21 +395,21 @@ test("stationMatchesTypeCodes treats an empty type list as no filter", () => {
     assert.equal(stationMatchesTypeCodes(null, []), true);
 });
 
-test("pickNearestStation returns the closest station of any type", () => {
-    const { pickNearestStation, NEAREST_MODE } = loadWidgetExports();
+test("pickNearestStation returns the closest station of any type when no Type filter is given", () => {
+    const { pickNearestStation } = loadWidgetExports();
 
     const stations = [
         { name: "Tram Stop", globalId: "t1", transportTypes: ["TRAM"], distanceInMeters: 50 },
         { name: "Marienplatz", globalId: "m1", transportTypes: ["SBAHN", "UBAHN"], distanceInMeters: 120 }
     ];
 
-    const nearest = pickNearestStation(stations, NEAREST_MODE.ANY);
+    const nearest = pickNearestStation(stations, null);
     assert.equal(nearest.name, "Tram Stop");
     assert.equal(nearest.globalId, "t1");
 });
 
-test("pickNearestStation in S-Bahn mode skips non-S-Bahn stops", () => {
-    const { pickNearestStation, NEAREST_MODE } = loadWidgetExports();
+test("pickNearestStation restricts to matching stations when given an explicit S-Bahn Type filter — 'Nearest S-Bahn' is just this, not a separate mode", () => {
+    const { pickNearestStation } = loadWidgetExports();
 
     const stations = [
         { name: "Bus Stop", globalId: "b1", transportTypes: ["BUS"], distanceInMeters: 30 },
@@ -410,28 +417,28 @@ test("pickNearestStation in S-Bahn mode skips non-S-Bahn stops", () => {
         { name: "Hauptbahnhof", globalId: "h1", transportTypes: ["SBAHN", "BAHN"], distanceInMeters: 300 }
     ];
 
-    const nearest = pickNearestStation(stations, NEAREST_MODE.SBAHN);
+    const nearest = pickNearestStation(stations, ["SBAHN"]);
     assert.equal(nearest.name, "Hauptbahnhof");
     assert.equal(nearest.globalId, "h1");
 });
 
 test("pickNearestStation sorts defensively by distance", () => {
-    const { pickNearestStation, NEAREST_MODE } = loadWidgetExports();
+    const { pickNearestStation } = loadWidgetExports();
 
     const stations = [
         { name: "Far", globalId: "f1", transportTypes: ["SBAHN"], distanceInMeters: 900 },
         { name: "Near", globalId: "n1", transportTypes: ["SBAHN"], distanceInMeters: 100 }
     ];
 
-    const nearest = pickNearestStation(stations, NEAREST_MODE.SBAHN);
+    const nearest = pickNearestStation(stations, ["SBAHN"]);
     assert.equal(nearest.name, "Near");
 });
 
 test("pickNearestStation returns null when no station matches", () => {
-    const { pickNearestStation, NEAREST_MODE } = loadWidgetExports();
+    const { pickNearestStation } = loadWidgetExports();
 
-    assert.equal(pickNearestStation([], NEAREST_MODE.ANY), null);
-    assert.equal(pickNearestStation([{ name: "Bus", transportTypes: ["BUS"] }], NEAREST_MODE.SBAHN), null);
+    assert.equal(pickNearestStation([], null), null);
+    assert.equal(pickNearestStation([{ name: "Bus", transportTypes: ["BUS"] }], ["SBAHN"]), null);
 });
 
 test("pickNearbyStationByLocation returns null when location access fails", async () => {
@@ -475,23 +482,45 @@ test("pickNearbyStationByLocation returns whichever station the user actually se
     assert.equal(result.distanceInMeters, 150);
 });
 
-test("nearest tokens map to the correct resolution mode", () => {
+test("nearest tokens all map to the single, unified live-location mode", () => {
+    // There is no separate "S-Bahn mode" any more — nearest-sbahn/nearest-s-bahn
+    // resolve to the same NEAREST_MODE.ANY as the plain nearest token; the
+    // legacy S-Bahn-only behavior comes from NEAREST_TOKEN_TYPES instead (see
+    // the next test).
     const { NEAREST_TOKENS, NEAREST_MODE } = loadWidgetExports();
 
     assert.equal(NEAREST_TOKENS["nearest"], NEAREST_MODE.ANY);
-    assert.equal(NEAREST_TOKENS["nearest-sbahn"], NEAREST_MODE.SBAHN);
-    assert.equal(NEAREST_TOKENS["nearest-s-bahn"], NEAREST_MODE.SBAHN);
+    assert.equal(NEAREST_TOKENS["nearest-sbahn"], NEAREST_MODE.ANY);
+    assert.equal(NEAREST_TOKENS["nearest-s-bahn"], NEAREST_MODE.ANY);
 });
 
-test("parseWidgetParameters detects a nearest-sbahn token alongside other filters", () => {
+test("NEAREST_TOKEN_TYPES gives legacy nearest-sbahn/nearest-s-bahn tokens an implicit S-Bahn Type filter", () => {
+    const { NEAREST_TOKEN_TYPES } = loadWidgetExports();
+
+    assert.deepEqual(Array.from(NEAREST_TOKEN_TYPES["nearest-sbahn"]), ["SBAHN"]);
+    assert.deepEqual(Array.from(NEAREST_TOKEN_TYPES["nearest-s-bahn"]), ["SBAHN"]);
+    assert.equal(NEAREST_TOKEN_TYPES["nearest"], undefined);
+});
+
+test("parseWidgetParameters resolves a legacy nearest-sbahn token to the unified mode plus an implicit S-Bahn Type filter", () => {
     const { parseWidgetParameters, NEAREST_MODE } = loadWidgetExports();
 
     const parsed = parseWidgetParameters("nearest-sbahn; lines: S3, S4; gradient: blue");
 
-    assert.equal(parsed.nearestMode, NEAREST_MODE.SBAHN);
+    assert.equal(parsed.nearestMode, NEAREST_MODE.ANY);
+    assert.deepEqual(Array.from(parsed.nearestTypes), ["SBAHN"]);
     assert.equal(Array.from(parsed.lines).join(","), "S3,S4");
     assert.equal(parsed.gradient, "blue");
     assert.equal(parsed.hasExplicitStation, false);
+});
+
+test("parseWidgetParameters lets an explicit 'types:' filter override a legacy nearest-sbahn token's implicit S-Bahn filter", () => {
+    const { parseWidgetParameters, NEAREST_MODE } = loadWidgetExports();
+
+    const parsed = parseWidgetParameters("nearest-sbahn; types: TRAM");
+
+    assert.equal(parsed.nearestMode, NEAREST_MODE.ANY);
+    assert.deepEqual(Array.from(parsed.nearestTypes), ["TRAM"]);
 });
 
 test("parseWidgetParameters parses test data and preview size overrides", () => {
@@ -623,16 +652,59 @@ test("Settings no longer exposes a Station Types default (it was only used for t
     assert.equal(/🚉 Station Types/.test(source), false, "'Station Types' Settings entry should have been removed");
 });
 
-test("pickNearestStation in ANY mode is never filtered by type, even without a Settings default", () => {
-    const { pickNearestStation, NEAREST_MODE } = loadWidgetExports();
+test("pickNearestStation respects an explicit per-preset Type filter, restricting to matching stations only", () => {
+    const { pickNearestStation } = loadWidgetExports();
 
     const stations = [
         { name: "Bus Stop", globalId: "b1", transportTypes: ["BUS"], distanceInMeters: 20 },
         { name: "Tram Stop", globalId: "t1", transportTypes: ["TRAM"], distanceInMeters: 50 }
     ];
 
-    const nearest = pickNearestStation(stations, NEAREST_MODE.ANY);
-    assert.equal(nearest.name, "Bus Stop");
+    const nearest = pickNearestStation(stations, ["TRAM"]);
+    assert.equal(nearest.name, "Tram Stop");
+
+    assert.equal(pickNearestStation(stations, ["SBAHN"]), null);
+});
+
+test("getNearestCacheKey keeps the original 'any' cache key when there's no Type filter, for backward compatibility", () => {
+    const { getNearestCacheKey, NEAREST_MODE } = loadWidgetExports();
+
+    assert.equal(getNearestCacheKey(null), "any");
+    assert.equal(getNearestCacheKey([]), "any");
+    assert.equal(getNearestCacheKey(null), NEAREST_MODE.ANY);
+});
+
+test("getNearestCacheKey gives differently-filtered presets their own cache slot (e.g. 'Nearest S-Bahn' vs plain 'Nearest')", () => {
+    const { getNearestCacheKey } = loadWidgetExports();
+
+    assert.equal(getNearestCacheKey(["SBAHN"]), "any:SBAHN");
+    assert.equal(getNearestCacheKey(["TRAM"]), "any:TRAM");
+    assert.equal(getNearestCacheKey(["UBAHN", "TRAM"]), "any:TRAM,UBAHN", "type codes should be sorted for a stable key");
+    assert.notEqual(getNearestCacheKey(["TRAM"]), getNearestCacheKey(["UBAHN"]));
+    assert.notEqual(getNearestCacheKey(["SBAHN"]), getNearestCacheKey(null));
+});
+
+test("getNearestTypesSummaryLabel describes a preset's Type filter, or 'any' when unset", () => {
+    const { getNearestTypesSummaryLabel } = loadWidgetExports();
+
+    assert.equal(getNearestTypesSummaryLabel(null), "any");
+    assert.equal(getNearestTypesSummaryLabel([]), "any");
+    assert.equal(getNearestTypesSummaryLabel(["SBAHN"]), "S-Bahn");
+    assert.equal(getNearestTypesSummaryLabel(["SBAHN", "TRAM"]), "S-Bahn, Tram");
+});
+
+test("codesToTypesConfig and getEnabledTypeCodes round-trip a preset's Type filter", () => {
+    const { codesToTypesConfig, getEnabledTypeCodes } = loadWidgetExports();
+
+    const config = codesToTypesConfig(["SBAHN", "TRAM"]);
+    assert.equal(config.sbahn, true);
+    assert.equal(config.tram, true);
+    assert.equal(config.ubahn, false);
+    assert.equal(config.bus, false);
+
+    assert.deepEqual(Array.from(getEnabledTypeCodes(config)), ["SBAHN", "TRAM"]);
+    assert.deepEqual(Array.from(getEnabledTypeCodes(codesToTypesConfig(null))), []);
+    assert.deepEqual(Array.from(getEnabledTypeCodes(codesToTypesConfig([]))), []);
 });
 
 test("buildDeparturesFromScenario converts test fixture rows into departure objects", () => {
@@ -704,15 +776,68 @@ test("buildPresetParameterString round-trips through parseWidgetParameters back 
     assert.equal(parsed.gradient, "teal");
 });
 
-test("buildPresetParameterString uses the canonical token for nearest-sbahn mode", () => {
+test("buildPresetParameterString always writes the bare 'nearest' token — there is no separate 'nearest-sbahn' mode any more", () => {
+    // "Nearest S-Bahn" is just the unified nearest mode with its Type filter
+    // set to ["SBAHN"] — buildPresetParameterString never emits the legacy
+    // "nearest-sbahn" token, even though parseWidgetParameters still accepts
+    // it for backward compatibility (see NEAREST_TOKEN_TYPES tests above).
     const { buildPresetParameterString, NEAREST_MODE } = loadWidgetExports();
 
     const result = buildPresetParameterString({
         gradient: "black",
-        nearestMode: NEAREST_MODE.SBAHN
+        nearestMode: NEAREST_MODE.ANY,
+        nearestTypes: ["SBAHN"]
     });
 
-    assert.equal(result, "nearest-sbahn; gradient: black");
+    assert.equal(result, "nearest; types: SBAHN; gradient: black");
+    assert.equal(result.includes("nearest-sbahn"), false);
+});
+
+test("buildPresetParameterString includes a Type filter only when it's non-empty", () => {
+    const { buildPresetParameterString, NEAREST_MODE } = loadWidgetExports();
+
+    const withFilter = buildPresetParameterString({
+        gradient: "black",
+        nearestMode: NEAREST_MODE.ANY,
+        nearestTypes: ["SBAHN", "TRAM"]
+    });
+    assert.equal(withFilter, "nearest; types: SBAHN,TRAM; gradient: black");
+
+    const withoutFilter = buildPresetParameterString({
+        gradient: "black",
+        nearestMode: NEAREST_MODE.ANY,
+        nearestTypes: []
+    });
+    assert.equal(withoutFilter, "nearest; gradient: black");
+    assert.equal(withoutFilter.includes("types:"), false);
+});
+
+test("buildPresetParameterString round-trips a Type filter through parseWidgetParameters", () => {
+    const { buildPresetParameterString, parseWidgetParameters, NEAREST_MODE } = loadWidgetExports();
+
+    const parameterString = buildPresetParameterString({
+        gradient: "black",
+        nearestMode: NEAREST_MODE.ANY,
+        nearestTypes: ["SBAHN", "TRAM"]
+    });
+
+    const parsed = parseWidgetParameters(parameterString);
+    assert.equal(parsed.nearestMode, NEAREST_MODE.ANY);
+    assert.deepEqual(Array.from(parsed.nearestTypes), ["SBAHN", "TRAM"]);
+});
+
+test("parseWidgetParameters defaults nearestTypes to null when no 'types:' filter is present", () => {
+    const { parseWidgetParameters } = loadWidgetExports();
+
+    const parsed = parseWidgetParameters("nearest; gradient: black");
+    assert.equal(parsed.nearestTypes, null);
+});
+
+test("parseWidgetParameters uppercases and trims a comma-separated 'types:' filter", () => {
+    const { parseWidgetParameters } = loadWidgetExports();
+
+    const parsed = parseWidgetParameters("nearest; types: sbahn, tram ; gradient: black");
+    assert.deepEqual(Array.from(parsed.nearestTypes), ["SBAHN", "TRAM"]);
 });
 
 test("buildPresetParameterString includes an optional test data file", () => {
@@ -727,13 +852,11 @@ test("buildPresetParameterString includes an optional test data file", () => {
     assert.equal(result, "nearest; gradient: black; test: on-time-mix.json");
 });
 
-test("NEAREST_MODE_TOKEN is the inverse of NEAREST_TOKENS for each mode", () => {
-    const { NEAREST_MODE_TOKEN, NEAREST_TOKENS, NEAREST_MODE } = loadWidgetExports();
+test("NEAREST_MODE has a single unified mode — there is no more separate S-Bahn mode value", () => {
+    const { NEAREST_MODE } = loadWidgetExports();
 
-    assert.equal(NEAREST_MODE_TOKEN[NEAREST_MODE.ANY], "nearest");
-    assert.equal(NEAREST_MODE_TOKEN[NEAREST_MODE.SBAHN], "nearest-sbahn");
-    assert.equal(NEAREST_TOKENS[NEAREST_MODE_TOKEN[NEAREST_MODE.ANY]], NEAREST_MODE.ANY);
-    assert.equal(NEAREST_TOKENS[NEAREST_MODE_TOKEN[NEAREST_MODE.SBAHN]], NEAREST_MODE.SBAHN);
+    assert.deepEqual(Array.from(Object.keys(NEAREST_MODE)), ["ANY"]);
+    assert.equal(NEAREST_MODE.SBAHN, undefined);
 });
 
 test("Create Preset wizard offers a '📍 Find Nearest' station option that resolves to a concrete station", () => {
@@ -751,10 +874,10 @@ test("Create Preset wizard offers a '📍 Find Nearest' station option that reso
     const askStationModeMatch = source.match(/function askStationMode\(\) \{[\s\S]*?\n\}/);
     assert.ok(askStationModeMatch, "askStationMode helper not found");
     assert.ok(/📍 Find Nearest/.test(askStationModeMatch[0]), "'📍 Find Nearest' label not found");
-    // The old, misleading "Nearest (no filter)" wizard *option* is gone — that
-    // exact label may still appear elsewhere (getNearestModeStationLabel uses
-    // it to describe an existing live-location preset's Station field), just
-    // not as a choice offered by this picker.
+    // The old, misleading "Nearest (no filter)" wizard *option* is gone —
+    // getNearestModeStationLabel now just says "📍 Nearest" for a
+    // live-location preset's Station field (the actual Type filter, if any,
+    // is shown separately — see the Type-filter tests).
     assert.equal(/📍 Nearest \(no filter\)/.test(askStationModeMatch[0]), false, "the old, misleading 'Nearest (no filter)' option should be gone from the picker");
 
     const createSavedStationMatch = source.match(/async function createSavedStation\(\) \{[\s\S]*?\n\}/);
@@ -762,6 +885,29 @@ test("Create Preset wizard offers a '📍 Find Nearest' station option that reso
     assert.ok(/askStationMode\(\)/.test(createSavedStationMatch[0]), "createSavedStation does not offer the station mode picker");
     assert.ok(/pickNearbyStationByLocation/.test(createSavedStationMatch[0]), "createSavedStation does not use pickNearbyStationByLocation");
     assert.equal(/nearestMode/.test(createSavedStationMatch[0]), false, "createSavedStation should not create a live-location preset");
+});
+
+test("Edit Preset offers a Type filter for any live-location preset (including 'Nearest S-Bahn'), but not for a regular station preset", () => {
+    // The user asked for a way to restrict/keep-only certain types on a
+    // nearest-mode preset from the UI. Since "Nearest S-Bahn" is now just the
+    // unified nearest mode with its Type filter set to ["SBAHN"] (not a
+    // separate hardcoded mode), it gets the same Type editor as "Nearest" —
+    // editing it here is exactly how you'd change which types it searches.
+    const source = fs.readFileSync(scriptPath, "utf8");
+
+    const editSavedStationMatch = source.match(/async function editSavedStation\(\) \{[\s\S]*?\n\}/);
+    assert.ok(editSavedStationMatch, "editSavedStation function not found");
+    const body = editSavedStationMatch[0];
+
+    assert.ok(/🌐 Type:/.test(body), "editSavedStation does not offer a Type filter action");
+    assert.ok(/if \(presetNearestMode\) \{/.test(body), "the Type action is not gated on presetNearestMode (every live-location preset should get it now — there is no separate S-Bahn mode)");
+    assert.ok(/askNearestTypesFilter/.test(body), "editSavedStation does not use askNearestTypesFilter");
+
+    // Editing away from a nearest-mode station (to a concrete one) must
+    // reset any Type filter, since it no longer applies to a fixed station.
+    const stationBranchMatch = body.match(/if \(fieldChoice === "station"\) \{[\s\S]*?\n {8}\} else if \(fieldChoice === "types"\)/);
+    assert.ok(stationBranchMatch, "station edit branch not found");
+    assert.ok(/nearestTypes = \[\]/.test(stationBranchMatch[0]), "editing the station does not reset the Type filter");
 });
 
 test("pickNearbyStationByLocation and findNearestStation share the same nearby-station picker", () => {
@@ -774,13 +920,15 @@ test("pickNearbyStationByLocation and findNearestStation share the same nearby-s
     assert.ok(/pickNearbyStationByLocation\(\)/.test(findNearestStationMatch[0]), "findNearestStation does not reuse pickNearbyStationByLocation");
 });
 
-test("ensureDefaultPresets creates the built-in 'Nearest' and 'Nearest S-Bahn' presets", () => {
+test("ensureDefaultPresets creates the built-in 'Nearest' and 'Nearest S-Bahn' presets, the latter as a unified nearest mode + Type filter", () => {
     const { exports, files } = loadWidgetExportsWithFileSystem();
     const { ensureDefaultPresets, DEFAULT_PRESET_DEFINITIONS, NEAREST_MODE, parseWidgetParameters } = exports;
 
     assert.deepEqual(Array.from(DEFAULT_PRESET_DEFINITIONS, p => p.name), ["Nearest", "Nearest S-Bahn"]);
     assert.equal(DEFAULT_PRESET_DEFINITIONS[0].nearestMode, NEAREST_MODE.ANY);
-    assert.equal(DEFAULT_PRESET_DEFINITIONS[1].nearestMode, NEAREST_MODE.SBAHN);
+    assert.deepEqual(Array.from(DEFAULT_PRESET_DEFINITIONS[0].nearestTypes), []);
+    assert.equal(DEFAULT_PRESET_DEFINITIONS[1].nearestMode, NEAREST_MODE.ANY);
+    assert.deepEqual(Array.from(DEFAULT_PRESET_DEFINITIONS[1].nearestTypes), ["SBAHN"]);
 
     ensureDefaultPresets();
 
@@ -788,13 +936,16 @@ test("ensureDefaultPresets creates the built-in 'Nearest' and 'Nearest S-Bahn' p
     const nearestSbahnFile = files.get("/tmp/Munich Commute/Nearest S-Bahn.txt");
     assert.ok(nearestFile, "Nearest.txt should have been created");
     assert.ok(nearestSbahnFile, "Nearest S-Bahn.txt should have been created");
+    assert.equal(nearestFile, "nearest; gradient: black");
+    assert.equal(nearestSbahnFile, "nearest; types: SBAHN; gradient: black", "'Nearest S-Bahn' should be written as the unified nearest token plus a Type filter, not a separate 'nearest-sbahn' token");
 
     const nearestParsed = parseWidgetParameters(nearestFile);
     assert.equal(nearestParsed.nearestMode, NEAREST_MODE.ANY);
     assert.equal(nearestParsed.hasExplicitStation, false);
 
     const nearestSbahnParsed = parseWidgetParameters(nearestSbahnFile);
-    assert.equal(nearestSbahnParsed.nearestMode, NEAREST_MODE.SBAHN);
+    assert.equal(nearestSbahnParsed.nearestMode, NEAREST_MODE.ANY);
+    assert.deepEqual(Array.from(nearestSbahnParsed.nearestTypes), ["SBAHN"]);
 
     // Settings.json should now record that the defaults were seeded.
     const settings = JSON.parse(files.get("/tmp/Munich Commute/Settings.json"));
@@ -818,11 +969,10 @@ test("ensureDefaultPresets does not recreate a preset the user deleted, once alr
     assert.equal(files.has("/tmp/Munich Commute/Nearest.txt"), false);
 });
 
-test("getNearestModeStationLabel distinguishes ANY and S-Bahn live-location modes", () => {
+test("getNearestModeStationLabel just indicates live-location mode — the Type filter is shown separately", () => {
     const { getNearestModeStationLabel, NEAREST_MODE } = loadWidgetExports();
 
-    assert.equal(getNearestModeStationLabel(NEAREST_MODE.ANY), "📍 Nearest (no filter)");
-    assert.equal(getNearestModeStationLabel(NEAREST_MODE.SBAHN), "📍 Nearest S-Bahn");
+    assert.equal(getNearestModeStationLabel(NEAREST_MODE.ANY), "📍 Nearest");
     assert.equal(getNearestModeStationLabel(null), null);
 });
 
@@ -986,6 +1136,38 @@ test("askGradient with allowKeepCurrent falls back to the current gradient via C
     assert.equal(gradient, "blue");
 });
 
+test("askNearestTypesFilter toggles a type on and returns the enabled codes on Back", async () => {
+    const { exports, presentedAlerts } = loadWidgetExportsWithAlertResponses([0, 6]);
+    const { askNearestTypesFilter } = exports;
+
+    const result = await askNearestTypesFilter([]);
+
+    assert.deepEqual(Array.from(result), ["SBAHN"]);
+    assert.equal(presentedAlerts.length, 2);
+    assert.equal(presentedAlerts[0].title, "Filter by Type");
+    assert.equal(presentedAlerts[0].actions[0], "🚇 S-Bahn: ❌");
+    assert.equal(presentedAlerts[0].actions[6], "← Back");
+    assert.equal(presentedAlerts[1].actions[0], "🚇 S-Bahn: ✅", "the toggle should be reflected on the next render");
+});
+
+test("askNearestTypesFilter starts from the preset's existing Type filter and can toggle it off again", async () => {
+    const { exports, presentedAlerts } = loadWidgetExportsWithAlertResponses([0, 6]);
+    const { askNearestTypesFilter } = exports;
+
+    const result = await askNearestTypesFilter(["SBAHN"]);
+
+    assert.deepEqual(Array.from(result), [], "toggling S-Bahn off from an already-filtered preset should clear the filter");
+    assert.equal(presentedAlerts[0].actions[0], "🚇 S-Bahn: ✅");
+});
+
+test("askNearestTypesFilter treats a dismissed sheet the same as Back", async () => {
+    const { exports } = loadWidgetExportsWithAlertResponses([-1]);
+    const { askNearestTypesFilter } = exports;
+
+    const result = await askNearestTypesFilter(["TRAM"]);
+    assert.deepEqual(Array.from(result), ["TRAM"]);
+});
+
 test("nearest-mode Settings defaults are applied once, and are not silently reapplied after being explicitly cleared", () => {
     // Regression test for: tapping a "nearest-sbahn" widget, closing the
     // preview, then choosing "Show without filters" (or manually clearing
@@ -994,7 +1176,7 @@ test("nearest-mode Settings defaults are applied once, and are not silently reap
     const results = runNearestDefaultsScenario(`
         DEFAULT_STATION_LINES = "S3, S4";
         DEFAULT_STATION_PLATFORM = "1";
-        nearestMode = NEAREST_MODE.SBAHN;
+        nearestMode = NEAREST_MODE.ANY;
         userLines = null;
         userPlatforms = null;
 
