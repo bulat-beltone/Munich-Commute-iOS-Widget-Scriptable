@@ -8,6 +8,7 @@ const root = path.join(__dirname, "..");
 const widgetSource = fs.readFileSync(path.join(root, "Munich Commute Widget.js"), "utf8")
     .replace(/\nawait main\(\);\nScript\.complete\(\);\s*$/, "");
 const homePreset = fs.readFileSync(path.join(root, "presets", "Home.txt"), "utf8").trim();
+const workPreset = fs.readFileSync(path.join(root, "presets", "Work.txt"), "utf8").trim();
 
 function load({ departures = {}, fileManager = {}, alerts = [] } = {}) {
     class Alert {
@@ -67,6 +68,20 @@ test("Home preset parses into three stations with walking times and route filter
     ]);
     assert.deepEqual(clean(parsed.sources.map(s => [...new Set(s.routes.map(r => r.line))])), [["S3"], ["S4"], ["157"]]);
     assert.ok(parsed.sources[2].routes.some(r => r.destination === "Am Harras"));
+});
+
+test("Work preset parses into Laim (S3/S4 westbound) and Pronnerplatz (157 westbound)", () => {
+    const api = load();
+    const parsed = api.parseWidgetParameters(workPreset);
+    assert.equal(parsed.title, "Работа → Дом");
+    assert.deepEqual(clean(parsed.sources.map(s => [s.id, s.name, s.walk])), [
+        ["de:09162:9", "Laim", 6],
+        ["de:09162:1648", "Pronnerplatz", 7]
+    ]);
+    assert.deepEqual(clean([...new Set(parsed.sources[0].routes.map(r => r.line))]), ["S3", "S4"]);
+    assert.deepEqual(clean([...new Set(parsed.sources[1].routes.map(r => r.line))]), ["157"]);
+    assert.ok(parsed.sources[1].routes.some(r => r.destination === "Germering"));
+    assert.ok(!parsed.sources[1].routes.some(r => r.destination === "Am Harras"));
 });
 
 test("a preset without sources keeps the single-station behaviour", () => {
