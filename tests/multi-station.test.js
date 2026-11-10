@@ -60,7 +60,7 @@ test("Home preset parses into three stations with walking times and route filter
     const api = load();
     const parsed = api.parseWidgetParameters(homePreset);
     assert.equal(parsed.title, "Дом → Работа");
-    assert.equal(parsed.gradient, "blue");
+    assert.equal(parsed.gradient, "purple");
     assert.deepEqual(clean(parsed.sources.map(s => [s.id, s.name, s.walk])), [
         ["de:09162:1800", "Langwied", 5],
         ["de:09162:1700", "Leienfelsstraße", 7],
