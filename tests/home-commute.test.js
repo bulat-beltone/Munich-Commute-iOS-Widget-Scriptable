@@ -35,9 +35,9 @@ test('30-minute boundary includes the train; 31 minutes falls back to westbound 
   const b = { rows: [bus(8, { destination: 'Am Harras', lineId: 'swm:03157:G:H:016' }), bus(12)], complete: true };
   assert.match(a.recommendation({ rows: [row(30)], complete: true }, b, o, now), /^S3/);
   const text = a.recommendation({ rows: [row(31)], complete: true }, b, o, now);
-  assert.match(text, /^157 через 12 мин/);
+  assert.match(text, /^157 через 12 мин, в 18:12/);
   assert.doesNotMatch(text, /Am Harras/);
-  assert.match(text, /Подход к автобусу не учтён/);
+  assert.doesNotMatch(text, /Подход к автобусу не учтён/);
 });
 test('bus boarding point, direction and walking time must all match', () => {
   const a = load(), o = a.settings({ busWalkMinutes: 8 });
@@ -99,11 +99,20 @@ test('script returns text, schedules one notification, and completes; notify=fal
   }
 });
 
-test('user-edited six-minute office walk is preserved with one-minute buffer', () => {
+test('office walks come from WALK_FROM_WORK and there is no extra buffer: a train at exactly the walking time is reachable', () => {
   const a = load(), o = a.settings({});
   assert.equal(o.trainWalkMinutes, 6);
-  const text = a.recommendation({ rows: [row(6), row(7, { label: 'S4', destination: 'Geltendorf' }), row(16)], complete: true }, { rows: [], complete: true }, o, now);
-  assert.equal(text, 'S4 через 7 мин\nСледующий: S3 через 16 мин');
+  assert.equal(o.busWalkMinutes, 7);
+  assert.equal(o.bufferMinutes, 0);
+  const text = a.recommendation({ rows: [row(5), row(6), row(7, { label: 'S4', destination: 'Geltendorf' }), row(16)], complete: true }, { rows: [], complete: true }, o, now);
+  assert.equal(text, 'S3 через 6 мин, в 18:06\nСледующий: S4 через 7 мин, в 18:07');
+});
+test('the clock time follows the delayed real-time departure', () => {
+  const a = load(), o = a.settings({});
+  const delayed = row(10, { realtimeDepartureTime: now + 12 * 60000 });
+  assert.equal(a.recommendation({ rows: [delayed], complete: true }, { rows: [], complete: true }, o, now), 'S3 через 12 мин, в 18:12\nСледующий: нет данных.');
+  const planned = row(10, { realtime: false });
+  assert.equal(a.recommendation({ rows: [planned], complete: true }, { rows: [], complete: true }, o, now), 'S3 через 10 мин, в 18:10 (по расписанию)\nСледующий: нет данных.');
 });
 
 function east(minutes, line = 'S3', changes = {}) {
@@ -148,48 +157,53 @@ test('the earliest reachable service wins across all routes; impossible and canc
   const a = load(), o = a.settings('Home Work');
   const s3 = board([east(4), east(15, 'S3', { cancelled: true }), row(16), east(25), east(45)]);
   const text = a.workRecommendation({ s3, s4: board([east(16, 'S4')]), bus: board([workBus(10)]) }, o, now);
-  assert.equal(text, '157 через 10 мин\nСледующий: S4 через 16 мин');
+  assert.equal(text, '157 через 10 мин, в 18:10\nСледующий: S4 через 16 мин, в 18:16');
 });
-test('unreachable S3 and S3 outside 30 minutes fall back to reachable S4', () => {
+test('trains below the walking time (S3 5 min, S4 7 min) are skipped; the next reachable S4 wins', () => {
   const a = load(), o = a.settings('Home Work');
-  const text = a.workRecommendation({ s3: board([east(10), east(31)]), s4: board([east(12, 'S4'), east(14, 'S4'), east(34, 'S4')]), bus: board([]) }, o, now);
-  assert.equal(text, 'S4 через 14 мин\nСледующий: S3 через 31 мин');
+  const text = a.workRecommendation({ s3: board([east(4), east(31)]), s4: board([east(6, 'S4'), east(14, 'S4'), east(34, 'S4')]), bus: board([]) }, o, now);
+  assert.equal(text, 'S4 через 14 мин, в 18:14\nСледующий: S3 через 31 мин, в 18:31');
+});
+test('a train exactly at the walking time is reachable (no buffer)', () => {
+  const a = load(), o = a.settings('Home Work');
+  const text = a.workRecommendation({ s3: board([east(5)]), s4: board([east(7, 'S4')]), bus: board([workBus(5)]) }, o, now);
+  assert.equal(text, 'S3 через 5 мин, в 18:05\nСледующий: 157 через 5 мин, в 18:05');
 });
 test('S3/S4 absence falls back to eastbound direct 157, not the reverse or Pasing-only bus', () => {
   const a = load(), o = a.settings('Home Work');
   const text = a.workRecommendation({ s3: board([]), s4: board([]), bus: board([workBus(2), bus(8), workBus(9, { destination: 'Pasing Bf.' }), workBus(11), workBus(31)]) }, o, now);
-  assert.equal(text, '157 через 11 мин\nСледующий: 157 через 31 мин');
+  assert.equal(text, '157 через 11 мин, в 18:11\nСледующий: 157 через 31 мин, в 18:31');
 });
 test('unknown S3 availability warns when showing S4 instead', () => {
   const a = load(), o = a.settings('Home Work');
   const text = a.workRecommendation({ s3: { error: true }, s4: board([east(20, 'S4')]), bus: board([]) }, o, now);
-  assert.match(text, /^S4 через 20 мин/);
+  assert.match(text, /^S4 через 20 мин, в 18:20/);
   assert.match(text, /S3: нет данных/);
 });
 test('earlier S4 wins over S3, rather than waiting for the preferred home station', () => {
   const a = load(), o = a.settings('Home Work');
   const text = a.workRecommendation({ s3: board([east(25)]), s4: board([east(16, 'S4')]), bus: board([workBus(28)]) }, o, now);
-  assert.equal(text, 'S4 через 16 мин\nСледующий: S3 через 25 мин');
+  assert.equal(text, 'S4 через 16 мин, в 18:16\nСледующий: S3 через 25 мин, в 18:25');
 });
 test('a train wins an exact tie with a bus; S3 wins a tie with S4 due to shorter walk', () => {
   const a = load(), o = a.settings('Home Work');
   const text = a.workRecommendation({ s3: board([east(20)]), s4: board([east(20, 'S4')]), bus: board([workBus(20)]) }, o, now);
-  assert.equal(text, 'S3 через 20 мин\nСледующий: S4 через 20 мин');
+  assert.equal(text, 'S3 через 20 мин, в 18:20\nСледующий: S4 через 20 мин, в 18:20');
 });
 test('no service in 30 minutes still returns the earliest later service across train and bus', () => {
   const a = load(), o = a.settings('Home Work');
   const text = a.workRecommendation({ s3: board([east(42)]), s4: board([east(36, 'S4')]), bus: board([workBus(50)]) }, o, now);
-  assert.equal(text, 'S4 через 36 мин\nСледующий: S3 через 42 мин');
+  assert.equal(text, 'S4 через 36 мин, в 18:36\nСледующий: S3 через 42 мин, в 18:42');
 });
 test('no separate bus cutoff: a later bus is still returned if it is the only known service', () => {
   const a = load(), o = a.settings('Home Work');
   const text = a.workRecommendation({ s3: board([]), s4: board([]), bus: board([workBus(100)]) }, o, now);
-  assert.equal(text, '157 через 100 мин\nСледующий: нет данных.');
+  assert.equal(text, '157 через 100 мин, в 19:40\nСледующий: нет данных.');
 });
 test('partial data warnings are kept even when another service is available', () => {
   const a = load(), o = a.settings('Home Work');
   const text = a.workRecommendation({ s3: { rows: [east(20)], complete: false }, s4: board([]), bus: board([]) }, o, now);
-  assert.match(text, /^S3 через 20 мин/);
+  assert.match(text, /^S3 через 20 мин, в 18:20/);
   assert.match(text, /S3: проверка неполная/);
 });
 test('Home Work run fetches the three verified stations and returns one notification', async () => {
@@ -208,6 +222,66 @@ test('Home Work run fetches the three verified stations and returns one notifica
 
 test('bus fallback leads with the bus and offers the next westbound bus', () => {
   const a = load(), o = a.settings({});
+  const text = a.recommendation({ rows: [], complete: true }, { rows: [bus(6), bus(12), bus(22)], complete: true }, o, now);
+  assert.equal(text, '157 через 12 мин, в 18:12\nСледующий: 157 через 22 мин, в 18:22');
+});
+test('bus walk set to null is not counted and the notice says so', () => {
+  const a = load(), o = a.settings({ busWalkMinutes: null });
   const text = a.recommendation({ rows: [], complete: true }, { rows: [bus(12), bus(22)], complete: true }, o, now);
-  assert.equal(text, '157 через 12 мин\nСледующий: 157 через 22 мин\nПодход к автобусу не учтён.');
+  assert.equal(text, '157 через 12 мин, в 18:12\nСледующий: 157 через 22 мин, в 18:22\nПодход к автобусу не учтён.');
+});
+
+function manualHarness(choice) {
+  const shown = [], sheets = [], notices = [], outputs = [];
+  let completed = 0;
+  class Request { async loadJSON() { return []; } }
+  class Notification { async schedule() { notices.push(this); } }
+  class Alert {
+    constructor() { this.actions = []; }
+    addAction(label) { this.actions.push(label); }
+    addCancelAction() {}
+    async presentSheet() { sheets.push(this.actions.slice()); return choice; }
+    async presentAlert() { shown.push({ title: this.title, message: this.message, actions: this.actions.slice() }); return 0; }
+  }
+  const a = load({ Request, Notification, Alert, args: {}, Script: { setShortcutOutput: x => outputs.push(x), complete: () => completed++ } });
+  return { a, shown, sheets, notices, outputs, done: () => completed };
+}
+test('manual run: menu offers Дом → Работа and Работа → Дом', async () => {
+  const h = manualHarness(0);
+  await h.a.runHome();
+  assert.deepEqual(h.sheets[0], ['Дом → Работа', 'Работа → Дом']);
+});
+test('manual run shows the result in an alert, not a notification', async () => {
+  for (const choice of [0, 1]) {
+    const h = manualHarness(choice);
+    await h.a.runHome();
+    assert.equal(h.notices.length, 0);
+    assert.equal(h.shown.length, 1);
+    assert.equal(h.outputs.length, 1);
+    assert.equal(h.shown[0].title, h.outputs[0].split('\n')[0]);
+    assert.equal(h.shown[0].message, h.outputs[0].split('\n').slice(1).join('\n'));
+    assert.deepEqual(h.shown[0].actions, ['OK']);
+    assert.equal(h.done(), 1);
+  }
+});
+test('manual run: cancelling the menu shows nothing', async () => {
+  const h = manualHarness(-1);
+  await h.a.runHome();
+  assert.equal(h.shown.length, 0);
+  assert.equal(h.notices.length, 0);
+  assert.equal(h.outputs.length, 0);
+  assert.equal(h.done(), 1);
+});
+test('Shortcuts run keeps the notification and opens the matching widget preset on tap', async () => {
+  for (const [parameter, preset] of [['home', 'Home'], ['work', 'Work']]) {
+    const notices = [], shown = [];
+    class Request { async loadJSON() { return []; } }
+    class Notification { async schedule() { notices.push(this); } }
+    class Alert { addAction() {} async presentAlert() { shown.push(1); } }
+    const a = load({ Request, Notification, Alert, args: { shortcutParameter: parameter }, Script: { setShortcutOutput() {}, complete() {} } });
+    await a.runHome();
+    assert.equal(shown.length, 0);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].openURL, `scriptable:///run/Munich%20Commute%20Widget?preset=${preset}`);
+  }
 });

@@ -3,7 +3,7 @@
 // icon-color: deep-green; icon-glyph: subway;
 // noinspection LanguageDetectionInspection
 
-// Updated 27 Feb, 2026
+// Updated 27 Oct, 2026
 // Check for updates here: https://github.com/bulat-beltone/Munich-Commute-iOS-Widget-Scriptable
 
 // ============================================================================
@@ -16,6 +16,7 @@ const DEFAULT_WIDGET_PARAMETERS = "station: Marienplatz; platform: 1; lines: S3,
 // Subtract this many minutes from displayed departure times
 let SUBTRACT_MINUTES = 1;
 let SHOW_SUBTRACT_MINUTES = true; // Show "-X" indicator in widget header
+let SHOW_DELAY_TIME = false; // Show "+N" delay badge next to departure time
 
 // Default values pre-filled in Find Nearest and Create New station flows
 let DEFAULT_STATION_LINES = "";
@@ -242,6 +243,10 @@ const LINE_COLORS = {
 // file was found, so the widget can show an error instead of a silent fallback.
 let missingPresetName = null;
 
+// Set when a preset file exists in iCloud but could not be read (e.g. not
+// downloaded yet), so the widget can show a friendly retry card.
+let unreadablePresetName = null;
+
 // Set to a NEAREST_MODE value when the widget should resolve the nearest station
 // from the current location instead of a fixed station name.
 let nearestMode = null;
@@ -250,7 +255,32 @@ let nearestMode = null;
 // globalId, so the widget can skip the name-based station lookup.
 let resolvedGlobalId = null;
 
-function resolveWidgetParameter(rawParameter) {
+// Downloads an iCloud file if needed, then reads it as trimmed text.
+// Returns null when the file is missing or still unreadable after download.
+async function readICloudText(fileManager, filePath) {
+    if (!fileManager.fileExists(filePath)) return null;
+
+    try {
+        if (typeof fileManager.isFileDownloaded === "function"
+            && !fileManager.isFileDownloaded(filePath)) {
+            console.log(`[INFO] Downloading iCloud file before read: '${filePath}'`);
+            await fileManager.downloadFileFromiCloud(filePath);
+        } else if (typeof fileManager.downloadFileFromiCloud === "function") {
+            // Safe even when already local; helps when isFileDownloaded is unavailable.
+            await fileManager.downloadFileFromiCloud(filePath);
+        }
+    } catch (e) {
+        console.log(`[WARN] Failed to download iCloud file '${filePath}': ${e}`);
+    }
+
+    const content = fileManager.readString(filePath);
+    return content == null ? null : String(content).trim();
+}
+
+async function resolveWidgetParameter(rawParameter) {
+    missingPresetName = null;
+    unreadablePresetName = null;
+
     const trimmedParameter = (rawParameter || "").trim();
     if (!trimmedParameter) return DEFAULT_WIDGET_PARAMETERS;
 
@@ -277,10 +307,15 @@ function resolveWidgetParameter(rawParameter) {
     for (const profileFilePath of profileFileCandidates) {
         if (!fileManager.fileExists(profileFilePath)) continue;
 
-        const loadedProfileContent = fileManager.readString(profileFilePath).trim();
+        const loadedProfileContent = await readICloudText(fileManager, profileFilePath);
         if (loadedProfileContent) {
             console.log(`[INFO] Loaded widget parameters from '${profileFilePath}'.`);
             return loadedProfileContent;
+        }
+        if (loadedProfileContent === null) {
+            console.log(`[WARN] Parameter profile file '${profileFilePath}' exists but could not be read.`);
+            unreadablePresetName = trimmedParameter;
+            return DEFAULT_WIDGET_PARAMETERS;
         }
         console.log(`[WARN] Parameter profile file '${profileFilePath}' is empty. Falling back to defaults.`);
         return DEFAULT_WIDGET_PARAMETERS;
@@ -291,11 +326,14 @@ function resolveWidgetParameter(rawParameter) {
     return DEFAULT_WIDGET_PARAMETERS;
 }
 
-// Parse widget parameters
-const paramString = resolveWidgetParameter(args.widgetParameter);
+// Defaults; resolved from args.widgetParameter inside main() so iCloud
+// downloads can be awaited before the first read.
 let userStation = "Marienplatz";
 let userPlatforms = null;
 let userLines = null;
+let userRoutes = null;
+let userSources = null; // Multi-station mode: several stops on one board.
+let userTitle = null;
 let userGradient = "black";
 let userTestDataFile = null;
 let userPreviewWidgetSize = null;
@@ -315,6 +353,9 @@ function parseWidgetParameters(rawParamString) {
         station: "Marienplatz",
         platforms: null,
         lines: null,
+        routes: null,
+        sources: null,
+        title: null,
         gradient: "black",
         testDataFile: null,
         previewWidgetSize: null,
@@ -354,6 +395,15 @@ function parseWidgetParameters(rawParamString) {
             case "lines":
                 parsed.lines = parseLineFilter(value);
                 break;
+            case "routes":
+                parsed.routes = parseRouteFilter(value);
+                break;
+            case "sources":
+                parsed.sources = parseSources(value);
+                break;
+            case "title":
+                parsed.title = value || null;
+                break;
             case "gradient":
             case "background":
                 if (CONFIG.gradients[value.toLowerCase()]) {
@@ -378,6 +428,9 @@ function applyParsedWidgetParameters(parsed) {
     userStation = parsed.station;
     userPlatforms = parsed.platforms;
     userLines = parsed.lines;
+    userRoutes = parsed.routes;
+    userSources = parsed.sources;
+    userTitle = parsed.title;
     userGradient = parsed.gradient;
     userTestDataFile = parsed.testDataFile;
     userPreviewWidgetSize = parsed.previewWidgetSize;
@@ -386,8 +439,6 @@ function applyParsedWidgetParameters(parsed) {
     // (e.g. a prior preset in an edit/preview loop) and must not leak here.
     resolvedGlobalId = null;
 }
-
-applyParsedWidgetParameters(parseWidgetParameters(paramString));
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -442,6 +493,211 @@ function parseLineFilter(value) {
     return parseCommaSeparatedFilter(value, line => line.toUpperCase());
 }
 
+// Routes are encoded JSON so station/destination punctuation cannot split parameters.
+function parseRouteFilter(value) {
+    const routes = JSON.parse(decodeURIComponent(value));
+    if (!Array.isArray(routes) || routes.some(route => !route ||
+        typeof route.line !== "string" || !route.line.trim() ||
+        !(route.destination === null || typeof route.destination === "string"))) {
+        throw new Error("Invalid saved lines and directions. Edit the preset to repair it.");
+    }
+    return routes.map(route => ({ line: route.line.trim().toUpperCase(), destination: route.destination }));
+}
+
+function routeKey(route) {
+    return JSON.stringify([route.line.toUpperCase(), route.destination]);
+}
+
+function matchesRouteFilter(departure, routes) {
+    if (routes === null || routes === undefined) return true;
+    return routes.some(route => route.line.toUpperCase() === (departure.label || "").toUpperCase() &&
+        (route.destination === null || route.destination === departure.destination));
+}
+
+// Multi-station mode. Preset parameter: sources: <URL-encoded JSON array>, e.g.
+// [{"id":"de:09162:1800","name":"Langwied","walk":5,
+//   "routes":[{"line":"S3","destination":"Holzkirchen"}]}]
+// id = MVG globalId of the station, name = label for logs, routes = same
+// line/destination filter as a normal preset (omit for all lines), walk =
+// minutes on foot: departures you can no longer reach are hidden.
+function parseSources(value) {
+    const sources = JSON.parse(decodeURIComponent(value));
+    if (!Array.isArray(sources) || !sources.length || sources.some(source => !source ||
+        typeof source.id !== "string" || !source.id.trim() ||
+        (source.walk !== undefined && (typeof source.walk !== "number" || !Number.isFinite(source.walk) || source.walk < 0 || source.walk > 180)) ||
+        (source.routes !== undefined && source.routes !== null && !Array.isArray(source.routes)))) {
+        throw new Error("Invalid sources. Each needs an id (MVG globalId); walk is a number of minutes.");
+    }
+    return sources.map(source => ({
+        id: source.id.trim(),
+        name: typeof source.name === "string" ? source.name : source.id.trim(),
+        walk: source.walk || 0,
+        routes: Array.isArray(source.routes)
+            ? source.routes.map(route => ({ line: String(route.line).trim().toUpperCase(), destination: route.destination === undefined ? null : route.destination }))
+            : null
+    }));
+}
+
+async function loadSourcesDepartures(sources, now = Date.now()) {
+    const boards = await Promise.all(sources.map(source => getDepartures(source.id)));
+    const merged = [];
+    boards.forEach((board, index) => {
+        const source = sources[index];
+        (Array.isArray(board) ? board : []).forEach(departure => {
+            if (!matchesRouteFilter(departure, source.routes)) return;
+            const time = getAdjustedDepartureTimestamp(departure) + SUBTRACT_MINUTES * 60 * 1000;
+            if (!(time >= now + source.walk * 60 * 1000)) return;
+            merged.push({ departure, time });
+        });
+    });
+    merged.sort((a, b) => a.time - b.time);
+    return merged.map(entry => entry.departure);
+}
+
+function buildRouteOptions(departures, savedRoutes = null, lines = "") {
+    const options = new Map();
+    const add = route => options.set(routeKey(route), route);
+    for (const entry of departures) {
+        if (typeof entry.label !== "string" || !entry.label.trim()) continue;
+        const line = entry.label.trim().toUpperCase();
+        add({ line, destination: null });
+        if (typeof entry.destination === "string" && entry.destination.trim()) {
+            add({ line, destination: entry.destination });
+        }
+    }
+    for (const route of savedRoutes || []) {
+        add({ line: route.line, destination: null });
+        add(route);
+    }
+    for (const line of parseLineFilter(lines) || []) add({ line, destination: null });
+    return [...options.values()].sort((a, b) =>
+        a.line.localeCompare(b.line, "en", { numeric: true }) ||
+        (a.destination === null ? -1 : b.destination === null ? 1 : a.destination.localeCompare(b.destination)));
+}
+
+async function discoverStationRoutes(station) {
+    const info = await getStationId(station);
+    if (!info) throw new Error("Could not find this station.");
+    const departures = [];
+    let successfulWindows = 0;
+    // The service caps replies. Sample throughout a day, rather than claiming
+    // the next 30 departures are a complete station timetable.
+    for (const offset of [0, 60, 180, 360, 720, 1080]) {
+        try {
+            const request = new Request(`https://www.mvg.de/api/bgw-pt/v3/departures?globalId=${encodeURIComponent(info.globalId)}&limit=100&offsetInMinutes=${offset}`);
+            request.timeoutInterval = 8;
+            const rows = await request.loadJSON();
+            if (!Array.isArray(rows)) throw new Error("Invalid departure response");
+            departures.push(...rows);
+            successfulWindows++;
+        } catch (error) {
+            console.log(`[WARN] Route discovery at +${offset} minutes: ${error.message}`);
+        }
+    }
+    if (!successfulWindows) throw new Error("Could not load lines and directions.");
+    return { departures, partial: successfulWindows < 6 };
+}
+
+async function chooseStationRoutes(station, current = {}) {
+    const oldRoutes = current.routes === undefined ? null : current.routes;
+    const oldLines = current.lines || "";
+    let discovery;
+    while (true) {
+        try {
+            discovery = await discoverStationRoutes(station);
+            if (!discovery.departures.length) throw new Error("No departures found for this station.");
+            break;
+        } catch (error) {
+            const alert = new Alert();
+            alert.title = "Lines unavailable";
+            alert.message = "Could not load the list. Retry or enter a line filter manually. Your saved directions will be kept.";
+            alert.addAction("Retry");
+            alert.addAction("Enter lines manually");
+            alert.addCancelAction("Cancel");
+            const action = await alert.presentSheet();
+            if (action === -1) return null;
+            if (action === 1) {
+                const lines = await askText({ title: "Lines (optional)", message: "Leave empty for all lines. Saved direction choices are kept.", defaultValue: oldLines, isOptional: true });
+                return lines === null ? null : { lines, routes: oldRoutes };
+            }
+        }
+    }
+    const options = buildRouteOptions(discovery.departures, oldRoutes, oldLines);
+    let unrestricted = oldRoutes === null && !oldLines;
+    let selected = new Map((oldRoutes === null
+        ? (parseLineFilter(oldLines) || []).map(line => ({ line, destination: null }))
+        : oldRoutes).map(route => [routeKey(route), { ...route }]));
+    let result = null;
+    const table = new UITable();
+    table.showSeparators = true;
+    const redraw = () => {
+        table.removeAllRows();
+        const addRow = (title, subtitle, onSelect, dismiss = false) => {
+            const row = new UITableRow();
+            row.height = subtitle ? 64 : 44;
+            row.addText(title, subtitle || "");
+            if (onSelect) { row.onSelect = onSelect; row.dismissOnSelect = dismiss; }
+            table.addRow(row);
+        };
+        const header = new UITableRow();
+        header.isHeader = true;
+        header.height = discovery.partial ? 110 : 90;
+        const heading = header.addText(station,
+            "Choose lines or destinations.\nSome services may be missing." +
+            (discovery.partial ? "\nSome data could not load." : ""));
+        heading.titleFont = Font.boldSystemFont(22);
+        heading.subtitleFont = Font.systemFont(13);
+        heading.subtitleColor = new Color("#8E8E93");
+        table.addRow(header);
+        addRow("Apply selection", "Save these choices to the setup", () => {
+            result = { lines: "", routes: unrestricted ? null : [...selected.values()] };
+        }, true);
+        addRow("Cancel", "Keep the previous choices", () => { result = null; }, true);
+        addRow(`${unrestricted ? "☑" : "☐"} All lines and directions`, "Includes services not shown below", () => {
+            unrestricted = !unrestricted;
+            selected.clear();
+            redraw();
+        });
+        for (const option of options) {
+            const checked = unrestricted || selected.has(routeKey(option)) ||
+                selected.has(routeKey({ line: option.line, destination: null }));
+            addRow(`${checked ? "☑" : "☐"} ${option.line}${option.destination === null ? " — all directions" : " → " + option.destination}`, "", () => {
+                if (unrestricted) {
+                    selected = new Map(options.filter(route => route.destination === null).map(route => [routeKey(route), route]));
+                    unrestricted = false;
+                }
+                const key = routeKey(option);
+                const wholeLineKey = routeKey({ line: option.line, destination: null });
+                if (option.destination === null) {
+                    for (const [id, route] of selected) if (route.line === option.line) selected.delete(id);
+                    if (!checked) selected.set(key, option);
+                } else if (selected.has(wholeLineKey)) {
+                    selected.delete(wholeLineKey);
+                    for (const route of options) {
+                        if (route.line === option.line && route.destination !== null && routeKey(route) !== key) selected.set(routeKey(route), route);
+                    }
+                } else if (selected.has(key)) selected.delete(key);
+                else selected.set(key, option);
+                redraw();
+            });
+        }
+        table.reload();
+    };
+    // Closing the native table without Apply is cancellation. Reopen on an
+    // empty Apply instead of accidentally turning an empty set into 'all'.
+    while (true) {
+        result = null;
+        redraw();
+        await table.present();
+        if (!result || result.routes === null || result.routes.length) return result;
+        const alert = new Alert();
+        alert.title = "Select at least one line or direction";
+        alert.message = "Or select All lines and directions.";
+        alert.addAction("OK");
+        await alert.presentAlert();
+    }
+}
+
 // The platform badge is only redundant when the platform filter has already
 // narrowed things down to a single, known platform. Any other case (no
 // filter, or a filter covering multiple platforms) still benefits from
@@ -464,7 +720,7 @@ function filterDeparturesByUserPreferences(departures) {
         const platformMatches = userPlatforms
             ? platformLabels.some(platformLabel => userPlatforms.includes(platformLabel))
             : true;
-        return lineMatches && platformMatches;
+        return lineMatches && platformMatches && matchesRouteFilter(entry, userRoutes);
     });
 }
 
@@ -491,7 +747,7 @@ function buildDeparturesFromScenario(data, now = Date.now()) {
     });
 }
 
-function loadTestDataFile(fileName) {
+async function loadTestDataFile(fileName) {
     const trimmedFileName = (fileName || "").trim();
     if (!trimmedFileName) return null;
 
@@ -513,7 +769,12 @@ function loadTestDataFile(fileName) {
         if (!fileManager.fileExists(testDataPath)) continue;
 
         try {
-            return JSON.parse(fileManager.readString(testDataPath));
+            const raw = await readICloudText(fileManager, testDataPath);
+            if (raw == null) {
+                console.log(`[ERROR] Failed to read test data '${testDataPath}'`);
+                return null;
+            }
+            return JSON.parse(raw);
         } catch (e) {
             console.log(`[ERROR] Failed to parse test data '${testDataPath}': ${e.message}`);
             return null;
@@ -666,7 +927,7 @@ function addDepartureTimeRow(parentStack, departure, index, widgetConfig, depart
     mainTimeText.lineLimit = 1;
 
     const isDelayed = departure.delayInMinutes > 0;
-    if (isDelayed && !departure.cancelled) {
+    if (SHOW_DELAY_TIME && isDelayed && !departure.cancelled) {
         timeRowStack.addSpacer(2);
 
         const delayFontSize = Math.max(10, Math.round(departureFontSize * 0.45));
@@ -1036,14 +1297,15 @@ async function fetchNearbyStations(latitude, longitude) {
     }
 }
 
-function saveNearestCache(mode, station) {
+async function saveNearestCache(mode, station) {
     try {
         const fileManager = FileManager.iCloud();
         const cachePath = fileManager.joinPath(ensureAppDirectory(), NEAREST_CACHE_FILE_NAME);
         let cache = {};
         if (fileManager.fileExists(cachePath)) {
             try {
-                cache = JSON.parse(fileManager.readString(cachePath)) || {};
+                const raw = await readICloudText(fileManager, cachePath);
+                cache = raw ? JSON.parse(raw) || {} : {};
             } catch (e) {
                 cache = {};
             }
@@ -1059,12 +1321,14 @@ function saveNearestCache(mode, station) {
     }
 }
 
-function loadNearestCache(mode) {
+async function loadNearestCache(mode) {
     try {
         const fileManager = FileManager.iCloud();
         const cachePath = fileManager.joinPath(getAppDirectory(), NEAREST_CACHE_FILE_NAME);
         if (!fileManager.fileExists(cachePath)) return null;
-        const cache = JSON.parse(fileManager.readString(cachePath));
+        const raw = await readICloudText(fileManager, cachePath);
+        if (raw == null) return null;
+        const cache = JSON.parse(raw);
         const entry = cache && cache[mode];
         if (entry && entry.globalId) {
             return { name: entry.name, globalId: entry.globalId, fromCache: true };
@@ -1086,13 +1350,13 @@ async function resolveNearestStation(mode) {
         const nearest = pickNearestStation(stations, mode);
         if (nearest) {
             console.log(`[INFO] Nearest ${mode} station: ${nearest.name} (${nearest.distanceInMeters}m)`);
-            saveNearestCache(mode, nearest);
+            await saveNearestCache(mode, nearest);
             return nearest;
         }
         console.log(`[WARN] No matching station found nearby for mode '${mode}'.`);
     }
 
-    const cached = loadNearestCache(mode);
+    const cached = await loadNearestCache(mode);
     if (cached) {
         console.log(`[INFO] Falling back to cached nearest ${mode} station: ${cached.name}`);
     }
@@ -1103,7 +1367,7 @@ async function resolveNearestStation(mode) {
 // WIDGET CREATION & RENDERING
 // ============================================================================
 
-function createMessageWidget(title, symbolName = "exclamationmark.triangle") {
+function createMessageWidget(title, symbolName = "exclamationmark.triangle", subtitle = null) {
     const widget = new ListWidget();
     widget.useDefaultPadding();
 
@@ -1138,6 +1402,20 @@ function createMessageWidget(title, symbolName = "exclamationmark.triangle") {
     titleText.minimumScaleFactor = 0.7;
     titleRow.addSpacer();
 
+    if (subtitle) {
+        widget.addSpacer(8);
+        const subtitleRow = widget.addStack();
+        subtitleRow.layoutHorizontally();
+        subtitleRow.addSpacer();
+        const subtitleText = subtitleRow.addText(subtitle);
+        subtitleText.font = Font.systemFont(12);
+        subtitleText.textColor = new Color("#ffffff", 0.75);
+        subtitleText.centerAlignText();
+        subtitleText.lineLimit = 3;
+        subtitleText.minimumScaleFactor = 0.7;
+        subtitleRow.addSpacer();
+    }
+
     widget.addSpacer();
 
     return widget;
@@ -1148,7 +1426,17 @@ async function createWidget() {
         console.log(`[ERROR]   - Preset not found for widget parameter: '${missingPresetName}'`);
         return createMessageWidget(
             `"${missingPresetName}" preset not found`,
-            "questionmark.folder"
+            "questionmark.folder",
+            "Check the widget Parameter matches a saved preset name."
+        );
+    }
+
+    if (unreadablePresetName) {
+        console.log(`[ERROR]   - Preset unreadable for widget parameter: '${unreadablePresetName}'`);
+        return createMessageWidget(
+            `Can't load "${unreadablePresetName}"`,
+            "icloud.and.arrow.down",
+            "iCloud file not ready yet. Open Scriptable or tap the widget to retry."
         );
     }
 
@@ -1178,7 +1466,7 @@ async function createWidget() {
         // resolution), so the "nearest" header treatment can still be
         // previewed offline with fixed fixture departures.
         console.log(`[INFO] Step 3: Loading test departures from '${userTestDataFile}'...`);
-        const testData = loadTestDataFile(userTestDataFile);
+        const testData = await loadTestDataFile(userTestDataFile);
         if (!testData) {
             return createMessageWidget(
                 `Test data not found`,
@@ -1188,6 +1476,12 @@ async function createWidget() {
         departures = buildDeparturesFromScenario(testData);
         console.log(`[INFO]   - Test departures loaded: ${departures.length}`);
     } else {
+        if (userSources) {
+            console.log(`[INFO] Step 3-4: Fetching ${userSources.length} stations for the multi-station board...`);
+            userStation = userTitle || userSources.map(source => source.name).join(" · ");
+            departures = await loadSourcesDepartures(userSources);
+            console.log(`[INFO]   - Departures fetched and filtered: ${departures.length}`);
+        } else {
         if (nearestMode) {
             console.log(`[INFO] Step 3: Resolving nearest station (mode: ${nearestMode})...`);
             const nearest = await resolveNearestStation(nearestMode);
@@ -1225,10 +1519,11 @@ async function createWidget() {
         console.log('[INFO] Step 4: Fetching departures from MVG API...');
         departures = await getDepartures(globalId);
         console.log(`[INFO]   - Departures fetched: ${departures.length}`);
+        }
     }
 
     console.log('[INFO] Step 5: Filtering departures by user preferences...');
-    departures = filterDeparturesByUserPreferences(departures);
+    if (!userSources) departures = filterDeparturesByUserPreferences(departures);
     console.log(`[INFO]   - Departures after filter: ${departures.length}`);
 
     if (departures.length === 0) {
@@ -1282,10 +1577,15 @@ async function createWidget() {
     tramIcon.imageSize = widgetConfig.iconSize;
     tramIcon.tintColor = Color.white();
 
-    // Display station name, removing "München-" prefix if present.
-    // In live-location mode, prefix with "Nearest:" to make the mode obvious.
+    // In live-location mode, prefix with the mode label so it's obvious the
+    // station was chosen automatically ("Nearest:" / "S-Bahn:").
     const displayStationName = userStation.replace(/^München-/, '');
-    const titleLabel = nearestMode ? `Nearest: ${displayStationName}` : displayStationName;
+    let titleLabel = displayStationName;
+    if (nearestMode === NEAREST_MODE.SBAHN) {
+        titleLabel = `S-Bahn: ${displayStationName}`;
+    } else if (nearestMode) {
+        titleLabel = `Nearest: ${displayStationName}`;
+    }
     const stationName = titleStack.addText(titleLabel);
     stationName.textColor = Color.white();
     stationName.leftAlignText();
@@ -1404,7 +1704,7 @@ async function findNearestStation() {
     // Prime the widget cache with the closest match so the "${widgetToken}"
     // widget parameter has a fallback when it cannot get a live GPS fix.
     const cacheCandidate = pickNearestStation(stations, mode);
-    if (cacheCandidate) saveNearestCache(mode, cacheCandidate);
+    if (cacheCandidate) await saveNearestCache(mode, cacheCandidate);
 
     // Show selection alert
     const selectionAlert = new Alert();
@@ -1437,6 +1737,7 @@ async function findNearestStation() {
     const presentPreview = async (overrideLines, overridePlatform) => {
         userStation = nearestStation;
         userLines = parseLineFilter(overrideLines === undefined ? lines : overrideLines);
+        userRoutes = null;
         userPlatforms = parsePlatformFilter(overridePlatform === undefined ? platform : overridePlatform);
         userGradient = "black";
 
@@ -1596,7 +1897,16 @@ async function promptForStationSelection() {
     };
 }
 
-async function persistPreset({ station, lines, platform, gradient, suggestedName }) {
+function buildPresetParameters({ station, lines, routes = null, platform, gradient }) {
+    const parts = [`station: ${station}`];
+    if (lines) parts.push(`lines: ${lines}`);
+    if (routes !== null) parts.push(`routes: ${encodeURIComponent(JSON.stringify(routes))}`);
+    if (platform) parts.push(`platform: ${platform}`);
+    parts.push(`gradient: ${gradient || "black"}`);
+    return parts.join("; ");
+}
+
+async function persistPreset({ station, lines, routes = null, platform, gradient, suggestedName }) {
     const profileNameInput = await askText({
         title: "Preset name",
         message: "Give this preset a short name (e.g., \"Home\", \"Work\").\nThis becomes the widget parameter.",
@@ -1617,12 +1927,21 @@ async function persistPreset({ station, lines, platform, gradient, suggestedName
 
     const parameterParts = [`station: ${station}`];
     if (lines) parameterParts.push(`lines: ${lines}`);
+    if (routes !== null) parameterParts.push(`routes: ${encodeURIComponent(JSON.stringify(routes))}`);
     if (platform) parameterParts.push(`platform: ${platform}`);
     parameterParts.push(`gradient: ${gradient || "black"}`);
 
     const fileManager = FileManager.iCloud();
     const profileDirectory = ensureAppDirectory();
     const profilePath = fileManager.joinPath(profileDirectory, `${profileName}.txt`);
+    if (fileManager.fileExists(profilePath)) {
+        const alert = new Alert();
+        alert.title = "Name already exists";
+        alert.message = `A preset named "${profileName}" already exists. Use Edit Preset or choose another name.`;
+        alert.addAction("OK");
+        await alert.presentAlert();
+        return null;
+    }
     fileManager.writeString(profilePath, parameterParts.join("; "));
 
     Pasteboard.copy(profileName);
@@ -1640,14 +1959,9 @@ async function createSavedStation() {
     const station = await searchAndSelectStation(stationInput);
     if (station === null) return null;
 
-    const lines = await askText({
-        title: "Lines (optional)",
-        message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
-        placeholder: DEFAULT_STATION_LINES || "S1, S2, U3",
-        defaultValue: DEFAULT_STATION_LINES,
-        isOptional: true
-    });
-    if (lines === null) return null;
+    const filters = await chooseStationRoutes(station, { lines: DEFAULT_STATION_LINES });
+    if (filters === null) return null;
+    const { lines, routes } = filters;
 
     const platform = await askText({
         title: "Platform (optional)",
@@ -1661,14 +1975,11 @@ async function createSavedStation() {
     const gradient = await askGradient();
     if (gradient === null) return null;
 
-    const profileName = await persistPreset({ station, lines, platform, gradient, suggestedName: station });
+    const profileName = await persistPreset({ station, lines, routes, platform, gradient, suggestedName: station });
     if (profileName === null) return null;
 
     // Show widget preview directly
-    userStation = station;
-    userPlatforms = parsePlatformFilter(platform);
-    userLines = parseLineFilter(lines);
-    if (CONFIG.gradients[gradient]) userGradient = gradient;
+    applyParsedWidgetParameters(parseWidgetParameters(buildPresetParameters({ station, lines, routes, platform, gradient })));
 
     const previousWidgetFamily = config.widgetFamily;
     config.widgetFamily = "large";
@@ -1719,7 +2030,7 @@ async function viewSavedStation() {
     const profileName = files[selectedIndex];
     console.log(`[INFO]   - Loading saved station profile: '${profileName}'`);
 
-    const selectedParameterString = resolveWidgetParameter(profileName);
+    const selectedParameterString = await resolveWidgetParameter(profileName);
     applyParsedWidgetParameters(parseWidgetParameters(selectedParameterString));
 
     const previewSize = getPreviewWidgetSize();
@@ -1772,13 +2083,31 @@ async function editSavedStation() {
 
     const originalProfileName = files[selectedIndex];
     const originalProfilePath = fileManager.joinPath(profileDirectory, `${originalProfileName}.txt`);
-    const content = fileManager.readString(originalProfilePath).trim();
+    const content = await readICloudText(fileManager, originalProfilePath);
+    if (content == null) {
+        const errorAlert = new Alert();
+        errorAlert.title = "Can't Load Preset";
+        errorAlert.message = `"${originalProfileName}" exists in iCloud but isn't available yet. Open the file in Files/Scriptable, then try again.`;
+        errorAlert.addAction("OK");
+        await errorAlert.presentAlert();
+        return null;
+    }
 
     // Parse existing values
     const existingParams = parseWidgetParameters(content);
+    if (existingParams.sources) {
+        // The editor only knows one station; saving would drop the sources.
+        const multiAlert = new Alert();
+        multiAlert.title = "Multi-station preset";
+        multiAlert.message = `"${originalProfileName}" has several stations. Edit its file in Munich Commute/${originalProfileName}.txt by hand; this editor would erase the stations.`;
+        multiAlert.addAction("OK");
+        await multiAlert.presentAlert();
+        return null;
+    }
     let station = existingParams.station;
     let platform = existingParams.platforms ? existingParams.platforms.join(", ") : "";
     let lines = existingParams.lines ? existingParams.lines.join(", ") : "";
+    let routes = existingParams.routes;
     let gradient = existingParams.gradient;
     let testDataFile = existingParams.testDataFile || "";
 
@@ -1790,7 +2119,7 @@ async function editSavedStation() {
         editMenu.title = `Edit: ${profileName}`;
         editMenu.message = "Select a parameter to edit:";
         editMenu.addAction(`🚉 Station: ${station || "—"}`);
-        editMenu.addAction(`🚆 Lines: ${lines || "all"}`);
+        editMenu.addAction(`🚆 Lines & directions: ${routes !== null ? routes.length + " selected" : lines || "all"}`);
         editMenu.addAction(`🛤 Platform: ${platform || "all"}`);
         editMenu.addAction(`🎨 Gradient: ${gradient}`);
         editMenu.addAction(`📝 Name: ${profileName}`);
@@ -1813,18 +2142,17 @@ async function editSavedStation() {
             if (stationInput !== station) {
                 const newStation = await searchAndSelectStation(stationInput);
                 if (newStation === null) return null;
+                const filters = await chooseStationRoutes(newStation);
+                if (filters === null) continue;
                 station = newStation;
+                lines = filters.lines;
+                routes = filters.routes;
             }
         } else if (fieldChoice === 1) {
-            const newLines = await askText({
-                title: "Lines (optional)",
-                message: "Filter by specific lines (comma-separated).\nLeave empty to show all lines.",
-                placeholder: lines || "S1, S2, U3",
-                defaultValue: lines,
-                isOptional: true
-            });
-            if (newLines === null) return null;
-            lines = newLines;
+            const filters = await chooseStationRoutes(station, { lines, routes });
+            if (filters === null) continue;
+            lines = filters.lines;
+            routes = filters.routes;
         } else if (fieldChoice === 2) {
             const newPlatform = await askText({
                 title: "Platform (optional)",
@@ -1871,6 +2199,7 @@ async function editSavedStation() {
 
     const parameterParts = [`station: ${station}`];
     if (lines) parameterParts.push(`lines: ${lines}`);
+    if (routes !== null) parameterParts.push(`routes: ${encodeURIComponent(JSON.stringify(routes))}`);
     if (platform) parameterParts.push(`platform: ${platform}`);
     parameterParts.push(`gradient: ${gradient}`);
     if (testDataFile) parameterParts.push(`test: ${testDataFile}`);
@@ -1938,16 +2267,22 @@ function ensureAppDirectory() {
     return dir;
 }
 
-function loadSettings() {
+async function loadSettings() {
     const fileManager = FileManager.iCloud();
     const settingsPath = fileManager.joinPath(getAppDirectory(), SETTINGS_FILE_NAME);
     if (!fileManager.fileExists(settingsPath)) return;
     try {
-        const saved = JSON.parse(fileManager.readString(settingsPath));
+        const raw = await readICloudText(fileManager, settingsPath);
+        if (raw == null) {
+            console.log(`[WARN] Settings file exists but could not be read`);
+            return;
+        }
+        const saved = JSON.parse(raw);
         if (saved.transportTypes) Object.assign(TRANSPORT_TYPES, saved.transportTypes);
         if (saved.defaultStationTypes) Object.assign(DEFAULT_STATION_TYPES, saved.defaultStationTypes);
         if (typeof saved.subtractMinutes === "number") SUBTRACT_MINUTES = saved.subtractMinutes;
         if (typeof saved.showSubtractMinutes === "boolean") SHOW_SUBTRACT_MINUTES = saved.showSubtractMinutes;
+        if (typeof saved.showDelayTime === "boolean") SHOW_DELAY_TIME = saved.showDelayTime;
         if (typeof saved.defaultStationLines === "string") DEFAULT_STATION_LINES = saved.defaultStationLines;
         if (typeof saved.defaultStationPlatform === "string") DEFAULT_STATION_PLATFORM = saved.defaultStationPlatform;
     } catch (e) {
@@ -1963,6 +2298,7 @@ function saveSettings() {
         defaultStationTypes: { ...DEFAULT_STATION_TYPES },
         subtractMinutes: SUBTRACT_MINUTES,
         showSubtractMinutes: SHOW_SUBTRACT_MINUTES,
+        showDelayTime: SHOW_DELAY_TIME,
         defaultStationLines: DEFAULT_STATION_LINES,
         defaultStationPlatform: DEFAULT_STATION_PLATFORM
     }, null, 2));
@@ -2089,6 +2425,7 @@ async function showSettings() {
             { id: "transportTypes",   label: "🚇 Transport Types →" },
             { id: "subtractMinutes",  label: `⏱ Subtract Minutes: ${SUBTRACT_MINUTES}` },
             { id: "showSubtractMins", label: `👁 Show Subtracted Minutes: ${SHOW_SUBTRACT_MINUTES ? "✅" : "❌"}` },
+            { id: "showDelayTime",    label: `⏱ Show Delay Time: ${SHOW_DELAY_TIME ? "✅" : "❌"}` },
         ];
         const menu = new Alert();
         menu.title = "Settings";
@@ -2117,6 +2454,9 @@ async function showSettings() {
             saveSettings();
         } else if (action === "showSubtractMins") {
             SHOW_SUBTRACT_MINUTES = !SHOW_SUBTRACT_MINUTES;
+            saveSettings();
+        } else if (action === "showDelayTime") {
+            SHOW_DELAY_TIME = !SHOW_DELAY_TIME;
             saveSettings();
         }
     }
@@ -2159,87 +2499,112 @@ function getMainMenuActionForIndex(selectedIndex) {
 // ============================================================================
 
 async function main() {
-    console.log('[INFO] Munich Commute Widget script started');
-    loadSettings();
-    console.log('[INFO] Step 1: Parsing parameters...');
-    console.log(`[INFO]   - Station: '${userStation}'`);
-    console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
-    console.log(`[INFO]   - Lines: '${userLines}'`);
-    console.log(`[INFO]   - Gradient: '${userGradient}'`);
-    console.log(`[INFO]   - Transport Types: using default configuration`);
+    try {
+        console.log('[INFO] Munich Commute Widget script started');
+        await loadSettings();
 
-    // Check if launched from widget tap (not running inside widget, but has widget parameter or launched from home screen)
-    const launchedFromWidgetTap = !config.runsInWidget && (config.runsFromHomeScreen || args.widgetParameter);
+        missingPresetName = null;
+        unreadablePresetName = null;
+        const queryPreset = args.queryParameters && typeof args.queryParameters.preset === "string" ? args.queryParameters.preset.trim() : "";
+        const paramString = await resolveWidgetParameter(args.widgetParameter || queryPreset);
+        applyParsedWidgetParameters(parseWidgetParameters(paramString));
 
-    if (!config.runsInWidget && !launchedFromWidgetTap) {
-        const menuChoice = await showMainMenu();
-        const menuAction = getMainMenuActionForIndex(menuChoice);
+        console.log('[INFO] Step 1: Parsing parameters...');
+        console.log(`[INFO]   - Station: '${userStation}'`);
+        console.log(`[INFO]   - Platforms: '${userPlatforms}'`);
+        console.log(`[INFO]   - Lines: '${userLines}'`);
+        console.log(`[INFO]   - Gradient: '${userGradient}'`);
+        console.log(`[INFO]   - Transport Types: using default configuration`);
 
-        if (menuAction === MAIN_MENU_ACTION.CREATE_SAVED_STATION) {
-            // Create Saved Station - wizard
-            const savedProfile = await createSavedStation();
-            if (savedProfile) {
-                console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
-                await showPostCreateInstructions(savedProfile);
+        // Check if launched from widget tap (not running inside widget, but has widget parameter or launched from home screen)
+        const launchedFromWidgetTap = !config.runsInWidget && (config.runsFromHomeScreen || args.widgetParameter || queryPreset);
+
+        if (!config.runsInWidget && !launchedFromWidgetTap) {
+            const menuChoice = await showMainMenu();
+            const menuAction = getMainMenuActionForIndex(menuChoice);
+
+            if (menuAction === MAIN_MENU_ACTION.CREATE_SAVED_STATION) {
+                // Create Saved Station - wizard
+                const savedProfile = await createSavedStation();
+                if (savedProfile) {
+                    console.log(`[INFO]   - Created saved station profile: '${savedProfile}'`);
+                    await showPostCreateInstructions(savedProfile);
+                }
+                return;
+            } else if (menuAction === MAIN_MENU_ACTION.EDIT_SAVED_STATION) {
+                // Edit Saved Station
+                const editedProfile = await editSavedStation();
+                if (editedProfile) {
+                    console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
+                }
+                return;
+            } else if (menuAction === MAIN_MENU_ACTION.VIEW_SAVED_STATION) {
+                // View Saved Station - open selected profile in large size
+                const viewedProfile = await viewSavedStation();
+                if (viewedProfile) {
+                    console.log('[INFO]   - Viewed saved station profile.');
+                }
+                return;
+            } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_STATION) {
+                // Find Nearest Station - wizard with geolocation. Respects the
+                // Station Types default from Settings (any station if unset).
+                // Handles its own preview loop and optional save, so nothing to render afterwards.
+                await findNearestStation();
+                return;
+            } else if (menuAction === MAIN_MENU_ACTION.SETTINGS) {
+                await showSettings();
+                return;
+            } else if (menuAction === MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET) {
+                await showHowToAddWidgetInstructions();
+                return;
+            } else {
+                // Cancelled
+                console.log('[INFO]   - User cancelled main menu.');
+                return;
             }
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.EDIT_SAVED_STATION) {
-            // Edit Saved Station
-            const editedProfile = await editSavedStation();
-            if (editedProfile) {
-                console.log(`[INFO]   - Edited saved station profile: '${editedProfile}'`);
-            }
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.VIEW_SAVED_STATION) {
-            // View Saved Station - open selected profile in large size
-            const viewedProfile = await viewSavedStation();
-            if (viewedProfile) {
-                console.log('[INFO]   - Viewed saved station profile.');
-            }
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.FIND_NEAREST_STATION) {
-            // Find Nearest Station - wizard with geolocation. Respects the
-            // Station Types default from Settings (any station if unset).
-            // Handles its own preview loop and optional save, so nothing to render afterwards.
-            await findNearestStation();
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.SETTINGS) {
-            await showSettings();
-            return;
-        } else if (menuAction === MAIN_MENU_ACTION.HOW_TO_ADD_WIDGET) {
-            await showHowToAddWidgetInstructions();
-            return;
-        } else {
-            // Cancelled
-            console.log('[INFO]   - User cancelled main menu.');
-            return;
+        } else if (launchedFromWidgetTap) {
+            console.log('[INFO]   - Launched from widget tap, skipping menu and showing widget directly.');
         }
-    } else if (launchedFromWidgetTap) {
-        console.log('[INFO]   - Launched from widget tap, skipping menu and showing widget directly.');
-    }
 
-    const widget = await createWidget();
-    console.log('[INFO] Step 7: Widget construction complete.');
+        const widget = await createWidget();
+        console.log('[INFO] Step 7: Widget construction complete.');
 
-    if (!config.runsInWidget) {
-        const widgetSize = config.widgetFamily || 'large';
-        switch(widgetSize) {
-            case 'small':
-                console.log('[INFO] Step 8: Presenting small widget preview.');
-                await widget.presentSmall();
-                break;
-            case 'large':
-                console.log('[INFO] Step 8: Presenting large widget preview.');
-                await widget.presentLarge();
-                break;
-            default:
-                console.log('[INFO] Step 8: Presenting medium widget preview.');
-                await widget.presentMedium();
+        if (!config.runsInWidget) {
+            const widgetSize = config.widgetFamily || 'large';
+            switch(widgetSize) {
+                case 'small':
+                    console.log('[INFO] Step 8: Presenting small widget preview.');
+                    await widget.presentSmall();
+                    break;
+                case 'large':
+                    console.log('[INFO] Step 8: Presenting large widget preview.');
+                    await widget.presentLarge();
+                    break;
+                default:
+                    console.log('[INFO] Step 8: Presenting medium widget preview.');
+                    await widget.presentMedium();
+            }
+        }
+
+        Script.setWidget(widget);
+        console.log('[INFO] Step 9: Script finished.');
+    } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        console.log(`[ERROR] Unhandled failure: ${message}`);
+        const errorWidget = createMessageWidget(
+            "Something went wrong",
+            "exclamationmark.triangle",
+            "Tap to retry. Open Scriptable for details."
+        );
+        Script.setWidget(errorWidget);
+        if (!config.runsInWidget) {
+            try {
+                await errorWidget.presentMedium();
+            } catch (presentError) {
+                console.log(`[WARN] Failed to present error widget: ${presentError}`);
+            }
         }
     }
-
-    Script.setWidget(widget);
-    console.log('[INFO] Step 9: Script finished.');
 }
 
 await main();

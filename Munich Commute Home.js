@@ -1,23 +1,32 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
-// icon-color: deep-green; icon-glyph: bus;
+// icon-color: blue; icon-glyph: bus;
 // Independent script: no widget imports, settings, or saved data.
 
 // HOME → WORK: change these walking times to match your pace.
 // Initial estimates from OSM walking routes, not measured personal times.
 const WALK_FROM_HOME = {
-  s3: 11,     // Langwied
-  s4: 13,     // Leienfelsstraße
-  bus157: 6,  // Staufener Straße, towards Am Harras
+  s3: 5,     // Langwied
+  s4: 7,     // Leienfelsstraße
+  bus157: 5,  // Staufener Straße, towards Am Harras
 };
+// WORK → HOME: walking minutes from work to the stop.
+const WALK_FROM_WORK = {
+  train: 6,    // Laim (S3/S4)
+  bus157: 7,   // Pronnerplatz, westbound: на 1 мин дольше, чем до S-Bahn.
+};
+// Tap on the notification opens this widget script with a saved preset
+// (Munich Commute/<preset>.txt): Home = leaving home, Work = leaving work.
+const BOARD_SCRIPT = "Munich Commute Widget";
+const BOARD_PRESET = { homeWork: "Home", workHome: "Work" };
 const HOME_WORK_SEARCH_MINUTES = 180; // Look further ahead when nothing leaves soon.
 
 const HOME = {
   mode: "workHome", // Shortcuts parameter "home" = leaving home, "work" (or empty) = leaving work.
   trainLines: ["S3", "S4"],
-  trainWalkMinutes: 6, // User-edited walk to Laim; preserved from iCloud.
-  busWalkMinutes: null,   // Set your walk to Pronnerplatz, westbound stop.
-  bufferMinutes: 1,
+  trainWalkMinutes: WALK_FROM_WORK.train,
+  busWalkMinutes: WALK_FROM_WORK.bus157,
+  bufferMinutes: 0,
   trainWindowMinutes: 30,
   busWindowMinutes: 90,
   notify: true, // false: return text for Shortcuts → Show Notification instead.
@@ -131,7 +140,10 @@ async function fetchBoard(station, horizon, now) {
 function departureSummary(row, now) {
   const minutes = Math.max(0, Math.ceil((departureTime(row) - now) / 60000));
   const timing = row.realtime === true ? "" : " (по расписанию)";
-  return `${row.label} через ${minutes} мин${timing}`;
+  const formatter = new DateFormatter();
+  formatter.dateFormat = "HH:mm";
+  const clock = formatter.string(new Date(departureTime(row)));
+  return `${row.label} через ${minutes} мин, в ${clock}${timing}`;
 }
 
 function followingOption(rows, now) {
@@ -204,8 +216,21 @@ function workRecommendation(results, options, now) {
 async function runHome() {
   let options = { ...HOME };
   let text;
+  let manual = false;
   try {
-    options = settings(args.shortcutParameter);
+    let input = args.shortcutParameter;
+    if (input == null || (typeof input === "string" && !input.trim())) {
+      manual = true;
+      const alert = new Alert();
+      alert.title = "Откуда смотреть?";
+      alert.addAction("Дом → Работа");
+      alert.addAction("Работа → Дом");
+      alert.addCancelAction("Отмена");
+      const choice = await alert.presentSheet();
+      if (choice === -1) { Script.complete(); return; }
+      input = choice === 0 ? "Home" : "Work";
+    }
+    options = settings(input);
     const now = Date.now();
     const safeBoard = (station, horizon) => fetchBoard(station, horizon, now).catch(() => ({ error: true }));
     if (options.mode === "homeWork") {
@@ -226,11 +251,19 @@ async function runHome() {
     text = `Не удалось проверить дорогу домой: ${error.message || error}`;
   }
   Script.setShortcutOutput(text);
-  if (options.notify) {
+  if (manual) {
+    const [headline, ...details] = text.split("\n");
+    const result = new Alert();
+    result.title = headline;
+    result.message = details.join("\n");
+    result.addAction("OK");
+    await result.presentAlert();
+  } else if (options.notify) {
     const notification = new Notification();
     const [headline, ...details] = text.split("\n");
     notification.title = headline;
     notification.body = details.join("\n");
+    notification.openURL = `scriptable:///run/${encodeURIComponent(BOARD_SCRIPT)}?preset=${encodeURIComponent(BOARD_PRESET[options.mode])}`;
     await notification.schedule();
   }
   Script.complete();

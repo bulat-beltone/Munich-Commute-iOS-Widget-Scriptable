@@ -99,7 +99,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] When iOS denies a background GPS fix, the widget falls back to the cached station instead of erroring
 - [ ] With neither location nor cache, a styled "location unavailable" screen is shown
 - [ ] Station Defaults (Line / Platform) from Settings are applied automatically; explicit `lines:`/`platform:` in the parameter override them
-- [ ] Header uses a 📍 location icon and the title reads "Nearest: [station]"
+- [ ] Header uses a 📍 location icon and the title reads "Nearest: [station]" (or "S-Bahn: [station]" for `nearest-sbahn`)
 
 **Status:** ✅ `resolveNearestStation` + `NearestCache.json`. S-Bahn detection uses the nearby endpoint's `transportTypes` (falls back to `products` for the bundled dataset).
 
@@ -198,6 +198,7 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [ ] Transport types (S-Bahn, U-Bahn, Bus, Tram, etc.) — toggle
 - [ ] Default filters for Find Nearest
 - [ ] Subtract Minutes + `-N` indicator
+- [ ] Show Delay Time — toggle the red `+N` delay badge
 
 **Status:** ✅ `showSettings`.
 
@@ -209,3 +210,106 @@ Status: ✅ done · ⚠️ partial / known nuance · ❌ not implemented
 - [x] No departures (filters too strict) → styled error screen with station and active filters in the title
 - [x] No internet → alert in the wizard flows
 - [x] Unknown preset name in widget parameter → "Preset not found" screen with the preset name
+
+## 19. Choose preset lines and destinations
+
+**Status:** implemented; native iPhone check pending (27 Oct 2026).
+
+Creating a preset: choose a station, tap checkboxes for lines and destinations, apply, set an optional platform and colour, then save. Editing a preset: open Lines & directions, change the selection, apply, then Save.
+
+- Use a scrollable checkbox table; line rows include all destinations, destination rows select exact line/destination pairs.
+- All lines and directions means no route filter, including future routes. A selected whole line includes future destinations for that line. An empty selection cannot be applied.
+- Discover options from several departure windows across the next day, independently of widget type/line/platform/offset filters. This is a sample, not a full timetable. Show this limit in the picker. Keep saved choices even when absent from the sample.
+- Save and reload pairs without combining unrelated lines/destinations. Keep existing line/platform filters compatible. Cancel or dismiss leaves the preset untouched.
+- Retry network failure; allow manual line input while keeping saved route choices. Never replace a preset with empty data on API failure.
+- If the station changes, explicitly configure routes for the new station; cancelling keeps the old station and filters.
+- Check parsing/round trips, exact pair matching, whole-line matching, legacy presets, discovery errors, UI toggles, cancel and create/edit persistence. Native iPhone presentation requires a device check.
+
+Verification (27 Oct 2026): automated create/edit persistence, pair filtering, legacy settings, absent choices, checkbox changes, cancellation, empty selection, API errors and partial replies pass. Live discovery returned 11 lines/29 destinations for Laim and 2 lines/4 destinations for Pronnerplatz. Native iPhone table presentation remains unverified.
+
+27 Oct 2026, iPhone feedback: the station and availability text looked like menu actions. Combined them into one non-interactive header with a larger station title and smaller muted description. The screenshot confirms that the picker opens on iPhone; the revised header still needs a device check.
+
+---
+
+# Home ↔ Work and the multi-station board
+
+Scenarios for `Munich Commute Home.js` and the multi-station preset (`sources:`). Automated checks: `tests/home-commute.test.js`, `tests/multi-station.test.js`. Items marked 📱 need a real iPhone.
+
+## 20. Leaving home or work from Shortcuts
+
+**Scenario:** an automation fires when leaving home or work; the phone buzzes with the next departure.
+
+- [ ] Parameter `home` = leaving home, `work` = leaving work (case and spaces do not matter; `Home Work` / `Work Home` still work; empty = work)
+- [ ] Notification title: `S3 через 7 мин, в 18:07`; body: `Следующий: …`. The clock time stays valid when the notification is read later
+- [ ] Not live data → `(по расписанию)` after the time
+- [ ] Delayed train shows the delayed clock time
+- [ ] Unknown text parameter → message listing valid values, never a JSON error
+- [ ] 📱 Locked phone: the notification appears; Run Immediately, Run in App off
+
+**Status:** ✅ `settings`, `departureSummary` (tested).
+
+## 21. Walking time
+
+**Scenario:** only departures I can still reach are shown.
+
+- [ ] Constants at the top: `WALK_FROM_HOME` (S3 5, S4 7, 157 5) and `WALK_FROM_WORK` (train 6, 157 7). Change them there
+- [ ] No extra buffer (`bufferMinutes: 0`): a train at exactly the walking time is reachable
+- [ ] Departures below the walking time are skipped; delays are counted
+- [ ] A walking time of `null` is not counted and the notice says so
+- [ ] ⚠️ The same home walking times are also in `presets/Home.txt` (`walk`). Change both
+
+**Status:** ✅ tested.
+
+## 22. Manual run
+
+**Scenario:** I open the script in Scriptable.
+
+- [ ] Menu: `Дом → Работа` / `Работа → Дом`
+- [ ] The result is an alert (title = first line, message = the rest, OK). No notification
+- [ ] Cancel → nothing shown
+
+**Status:** ✅ tested. 📱 Alert look not checked.
+
+## 23. Notification tap opens the board
+
+**Scenario:** I tap the notification and see a large board instead of small text.
+
+- [ ] Notification carries `scriptable:///run/Munich%20Commute%20Widget?preset=Home` (leaving home) or `preset=Work` (leaving work)
+- [ ] The widget reads `preset` from the URL, treats it as a widget tap (no menu) and shows that preset large
+- [ ] 📱 Not verified on a device: URL run, preset read, large view
+
+**Status:** ⚠️ notification URL tested; the widget-side URL handling (`args.queryParameters.preset` in `main`) has no automated test.
+
+## 24. Multi-station board (`Home` preset)
+
+**Scenario:** leaving home I see S3, S4 and bus 157 in one list, sorted by time.
+
+- [ ] Preset `Home` (`presets/Home.txt` → iCloud `Munich Commute/Home.txt`): Langwied S3 (5 min), Leienfelsstraße S4 (7 min), Staufener Straße 157 → Am Harras (5 min)
+- [ ] One list sorted by real departure time; line badge, time and destination as in a normal preset
+- [ ] Unreachable departures are hidden; a station with no data does not hide the others
+- [ ] Header shows the `title:`; without it, the station names
+- [ ] `sources:` is a URL-encoded JSON array: `id` (MVG globalId), `name`, `walk`, `routes` (same as `routes:`)
+- [ ] Single-station presets behave exactly as before
+- [ ] 📱 Large widget rendering, home-screen widget with parameter `Home`
+
+**Status:** ✅ parsing, merging, filtering tested. 📱 Rendering not checked.
+
+## 25. Editing a multi-station preset
+
+**Scenario:** I open Edit Preset on `Home`.
+
+- [ ] The editor refuses: "Multi-station preset … edit its file by hand". Nothing is saved, so the stations are never replaced by a default station
+- [ ] View Preset works and shows the board
+- [ ] Creating or editing `sources` is done by hand in `Munich Commute/<name>.txt`
+
+**Status:** ✅ tested. ❌ No wizard for multi-station presets (by design for now).
+
+## 26. Repo and iCloud stay in sync
+
+**Scenario:** I deploy without losing work.
+
+- [ ] `deploy.sh` copies only `Munich Commute Widget.js`. `Munich Commute Home.js` and presets are copied by hand (`presets/Home.txt` → iCloud `Munich Commute/`)
+- [ ] Before deploying, compare repo and iCloud files; the iCloud copy of `Home.js` was newer than the repo on 10 Nov 2026
+
+**Status:** ⚠️ manual.
+
